@@ -1,7 +1,7 @@
 import json
 import os
 from dotenv import load_dotenv
-from graphAPI.graphs import getNotebookList, getSectionList
+from graphAPI.graphs import getNotebookList, getSectionList, getPagesList
 
 
 with open('cache.json') as f:
@@ -39,8 +39,15 @@ def main():
     if section_name not in sections:
         raise Exception(f"Section not found in the OneNote {notebook_name} directory !")
 
-    print(sections)
+    if "Pages" in CACHE and CACHE["Pages"] and section_name in CACHE["Pages"]:
+        pages = CACHE["Pages"][section_name]
+    else:
+        pages = getPagesList(sections[section_name]["id"])
+        CACHE["Pages"] = {section_name: pages}
+        update_cache = True
 
+    for p in pages:
+        print(p['title'], p['contentUrl'])
 
     if update_cache:
         updateCache()
