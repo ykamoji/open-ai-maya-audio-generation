@@ -203,7 +203,7 @@ def convert(Args, content, title):
         "maya-research/maya1",
         cache_dir=MODEL_PATH,
         dtype="float16",
-        device_map="cpu",
+        device_map="auto",
         trust_remote_code=True
     )
     tokenizer = AutoTokenizer.from_pretrained(
@@ -228,7 +228,6 @@ def convert(Args, content, title):
 
     audio_chunks = []
     for part, chunk in enumerate(chunks):
-        file = title+f"_{part}.wav"
         audio = processVoice(model, tokenizer, snac_model, chunk, description)
         audio_chunks.append(audio)
         if part % 5 == 0:
@@ -239,10 +238,12 @@ def convert(Args, content, title):
     output_file = f"{title}.wav"
 
     sf.write(output_file, full_audio, 24000)
-    # with wave.open(output_file, 'wb') as wav:
-    #     wav.setnchannels(1)
-    #     wav.setsampwidth(2)
-    #     wav.setframerate(24000)
-    #     wav.writeframes(full_audio)
-    # print(f"💾 Saved to {output_file}")
+
+    with wave.open('2'+output_file, 'wb') as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(24000)
+        wav.writeframes(full_audio)
+
+    print(f"💾 Saved to {output_file}")
 

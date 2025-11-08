@@ -1,8 +1,11 @@
 Graph:
   NotebookName: Trash
   SectionName: "Book 5"
+  RefreshPages: False
+  EnvPath: # /content/drive/MyDrive/AI/.env
 Generator:
-  Pages: 1 # number(s) or all
+  Pages: 1 # number(s) or empty
+  PageNo:
   OpenAI:
     Action: False
     ChunkLimit: 1000

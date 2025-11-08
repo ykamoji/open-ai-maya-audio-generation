@@ -3,7 +3,6 @@ import os
 import yaml
 import json
 
-
 class CustomObject:
     def __init__(self, /, **kwargs):
         self.__dict__.update(kwargs)
@@ -45,3 +44,8 @@ def get_yaml_loader():
     loader.add_constructor('!ENV', constructor_env_variables)
 
     return loader
+
+
+def updateCache(file, CACHE):
+    with open(file, 'w') as f:
+        json.dump(CACHE, f, indent=4)
