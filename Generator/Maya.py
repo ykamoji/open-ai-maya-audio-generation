@@ -3,6 +3,8 @@ import time
 import warnings
 import soundfile as sf
 import numpy as np
+import threading
+import queue
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from torch.utils.tensorboard import SummaryWriter
 from Generator.utils import createChunks
@@ -121,13 +123,37 @@ def getModels(MODEL_PATH):
     return model, snac_model, tokenizer
 
 
-def processVoice(model, tokenizer, snac_model, text, description, part, maxTokens):
+def convert(Args, content, title):
+
+    MayaArgs = Args.Generator.Maya
+
+    MODEL_PATH = MayaArgs.ModelPath.__dict__[Args.Platform]
+
+    model, snac_model, tokenizer = getModels(MODEL_PATH)
+
+    description = getDescription(MayaArgs, title)
+
+    outputPath = Args.Generator.AudioOutputPath.__dict__[Args.Platform]
+
+    batchSize = Args.Generator.BatchSize.__dict__[Args.Platform]
+
+    maxTokens = Args.Generator.Maya.MaxTokens
+
+    chunks = createChunks(content)
+
+    if batchSize > 0:
+        multiGPU(chunks, description, maxTokens, model, outputPath, snac_model, title, tokenizer)
+    else:
+        singleGPU(chunks, description, maxTokens, model, outputPath, snac_model, title, tokenizer)
+
+
+def processVoice(model, device, tokenizer, snac_model, text, description, part, maxTokens):
 
     prompt = build_prompt(tokenizer, description, text)
 
     inputs = tokenizer(prompt, return_tensors="pt")
     if torch.cuda.is_available():
-        inputs = {k: v.to("cuda") for k, v in inputs.items()}
+        inputs = {k: v.to(device) for k, v in inputs.items()}
 
     with torch.inference_mode():
         outputs = model.generate(
@@ -154,8 +180,8 @@ def processVoice(model, tokenizer, snac_model, text, description, part, maxToken
     snac_tokens = extract_snac_codes(generated_ids)
 
     if len(snac_tokens) < 7:
-        print("Error: Not enough SNAC tokens generated")
-        return
+        print(f"Part {part} Error: Not enough SNAC tokens generated")
+        # return
 
     levels = unpack_snac_from_7(snac_tokens)
 
@@ -172,30 +198,14 @@ def processVoice(model, tokenizer, snac_model, text, description, part, maxToken
     return audio
 
 
-def convert(Args, content, title):
-
-    MayaArgs = Args.Generator.Maya
-
-    MODEL_PATH = MayaArgs.ModelPath.__dict__[Args.Platform]
-
-    model, snac_model, tokenizer = getModels(MODEL_PATH)
-
-    description = getDescription(MayaArgs, title)
-
-    outputPath = Args.Generator.AudioOutputPath.__dict__[Args.Platform]
-    batchSize = Args.Generator.BatchSize.__dict__[Args.Platform]
-    maxTokens = Args.Generator.Maya.MaxTokens
-
-    chunks = createChunks(content)
+def singleGPU(chunks, description, maxTokens, model, outputPath, snac_model, title, tokenizer):
     audio_chunks = []
     input_lengths = []
     generation_times = []
-
     writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
-
     step = 0
     for part, chunk in enumerate(chunks):
-        print(chunk)
+        # print(chunk)
         input_length = len(chunk)
         if input_length == 0:
             # Adding a pause between paras to keep the conversation seperate
@@ -203,7 +213,7 @@ def convert(Args, content, title):
             continue
         print(f"Voice generation for part {step} ...")
         start_time = time.time()
-        audio = processVoice(model, tokenizer, snac_model, chunk, description, part, maxTokens)
+        audio = processVoice(model, "cuda", tokenizer, snac_model, chunk, description, part, maxTokens)
         generation_time = time.time() - start_time
         audio_duration = (len(audio) / 24000)
         print(f"Voice generation for part {step} ({audio_duration:.2f} sec) in {generation_time:.2f} sec")
@@ -212,7 +222,7 @@ def convert(Args, content, title):
         audio_chunks.append(np.zeros(int(0.1 * 24000)))
         if step % 5 == 0:
             partial_audio = np.concatenate(audio_chunks)
-            file = outputPath+f"partial_{step}.wav"
+            file = outputPath + f"partial_{step}.wav"
             sf.write(file, partial_audio, 24000)
             print(f"Saving partial audio until {step}")
 
@@ -231,11 +241,102 @@ def convert(Args, content, title):
                 writer.add_scalar("Performance/InputDurationCorr", correlation, step)
 
         step += 1
-
     writer.close()
-
     full_audio = np.concatenate(audio_chunks)
-
-    file = outputPath+f"{title}.wav"
+    file = outputPath + f"{title}.wav"
     sf.write(file, full_audio, 24000)
     print(f"Saved to {file}")
+
+
+def multiGPU(chunks, description, maxTokens, model, outputPath, snac_model, title, tokenizer):
+
+    writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
+
+    available_gpus = [f"cuda:{i}" for i in range(torch.cuda.device_count())]
+
+    q = queue.Queue()
+
+    for idx, text in enumerate(chunks):
+        q.put((idx, text, description))
+
+    lock = threading.Lock()
+    threads = []
+
+    sharedData = {
+        "results": {},
+        "global_step": 0,
+        "loger":writer,
+        "input_lengths":[],
+        "generation_times":[]
+    }
+    for gpu_id in available_gpus:
+        t = threading.Thread(target=gpu_worker,
+                             args=(gpu_id, q, model, snac_model, tokenizer, maxTokens, sharedData, lock))
+        t.start()
+        threads.append(t)
+
+    q.join()
+
+    for t in threads:
+        t.join()
+
+    ordered_audios = sharedData["results"]
+    ordered_indices = sorted(ordered_audios.keys())
+    full_audio = np.concatenate([ordered_audios[idx] for idx in ordered_indices])
+    file = outputPath + f"{title}.wav"
+    sf.write(file, full_audio, 24000)
+    print(f"Saved to {file}")
+
+
+def gpu_worker(gpu_id, q, model, snac_model, tokenizer, maxTokens, sharedData, lock):
+
+    device = torch.device(gpu_id)
+    model.to(device)
+
+    while True:
+        try:
+            idx, text, description = q.get(timeout=3)
+        except queue.Empty:
+            print(f"[{gpu_id}] No more prompts. Shutting down.")
+            break
+
+        text_len = len(text)
+        if text_len == 0:
+            audio = np.zeros(int(0.125 * 24000))
+            generation_time = 0
+            audio_duration = 0
+        else:
+            print(f"Voice generation for part {step} ...")
+            start_time = time.time()
+            audio = processVoice(model, device, tokenizer, snac_model, text, description, idx, maxTokens)
+            generation_time = time.time() - start_time
+            audio_duration = (len(audio) / 24000)
+            print(f"Voice generation for part {step} ({audio_duration:.2f} sec) in {generation_time:.2f} sec")
+            audio = np.concatenate([audio, np.zeros(int(0.1 * 24000))])
+
+        with lock:
+            sharedData["results"][idx] = audio
+            if text_len > 0:
+                step = sharedData["global_step"]
+                if sharedData["global_step"] > 0 and sharedData["global_step"] % 10 == 0:
+                    writer = sharedData["logger"]
+                    writer.add_scalar("Evaluation/InputSize", text_len, step)
+                    writer.add_scalar("Evaluation/AudioDuration", audio_duration, step)
+                    writer.add_scalar("Performance/GenerationTime", generation_time, step)
+
+                    rtf = generation_time / audio_duration if audio_duration > 0 else float('inf')
+
+                    sharedData["input_lengths"].append(text_len)
+                    sharedData["generation_times"].append(generation_time)
+
+                    writer.add_scalar("Performance/RTF", rtf, step)
+                    correlation = np.corrcoef(sharedData["input_lengths"], sharedData["generation_times"])[0, 1]
+                    writer.add_scalar("Performance/InputDurationCorr", correlation, step)
+
+                    partial_audio = np.concatenate(sharedData["results"])
+                    file = f"partial_{step}.wav"
+                    sf.write(file, partial_audio, 24000)
+                    print(f"Saving partial audio until {step}")
+
+                sharedData["global_step"] += 1
+        q.task_done()
