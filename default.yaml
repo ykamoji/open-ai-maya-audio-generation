@@ -8,9 +8,9 @@ Generator:
   PageNo:
   AudioOutputPath:
     Default: output/
-    Kaggle: /kaggle/working/output/
+    Kaggle: /kaggle/working/open-ai-audio-transcription/output/
     Colab: /content/drive/MyDrive/AI/Outputs/
-  BatchSize:
+  GPU:
     Default: 1
     Kaggle: 2
     Colab: 1
