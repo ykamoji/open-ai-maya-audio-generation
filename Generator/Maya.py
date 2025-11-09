@@ -178,33 +178,33 @@ def convert(Args, content, title):
 
     MODEL_PATH = MayaArgs.ModelPath.__dict__[Args.Platform]
 
-    # print("Loading model...")
-    # model = AutoModelForCausalLM.from_pretrained(
-    #     "maya-research/maya1",
-    #     cache_dir=MODEL_PATH,
-    #     dtype="float16",
-    #     device_map="auto",
-    #     trust_remote_code=True
-    # )
-    # model.eval()
-    # tokenizer = AutoTokenizer.from_pretrained(
-    #     "maya-research/maya1",
-    #     cache_dir=MODEL_PATH,
-    #     trust_remote_code=True
-    # )
-    # print(f"Model loaded: {len(tokenizer)} tokens in vocabulary")
-    #
-    # print("Loading SNAC audio decoder...")
-    # snac_model = SNAC.from_pretrained("hubertsiuzdak/snac_24khz").eval()
-    # if torch.cuda.is_available():
-    #     snac_model = snac_model.to("cuda")
-    # print("SNAC decoder loaded")
-    #
-    # description = ""
-    # for character in MayaArgs.Characters:
-    #     if character.Name in title:
-    #         description = character.Description
-    # print(f"Description: {description}")
+    print("Loading model...")
+    model = AutoModelForCausalLM.from_pretrained(
+        "maya-research/maya1",
+        cache_dir=MODEL_PATH,
+        dtype="float16",
+        device_map="auto",
+        trust_remote_code=True
+    )
+    model.eval()
+    tokenizer = AutoTokenizer.from_pretrained(
+        "maya-research/maya1",
+        cache_dir=MODEL_PATH,
+        trust_remote_code=True
+    )
+    print(f"Model loaded: {len(tokenizer)} tokens in vocabulary")
+
+    print("Loading SNAC audio decoder...")
+    snac_model = SNAC.from_pretrained("hubertsiuzdak/snac_24khz").eval()
+    if torch.cuda.is_available():
+        snac_model = snac_model.to("cuda")
+    print("SNAC decoder loaded")
+
+    description = ""
+    for character in MayaArgs.Characters:
+        if character.Name in title:
+            description = character.Description
+    print(f"Description: {description}")
 
     outputPath = Args.Generator.AudioOutputPath.__dict__[Args.Platform]
 
@@ -213,51 +213,51 @@ def convert(Args, content, title):
     input_lengths = []
     generation_times = []
 
-    # writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
+    writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
 
     step = 0
     for part, chunk in enumerate(chunks):
         print(chunk)
-        # input_length = len(chunk)
-        # if input_length == 0:
-        #     # Adding a pause between paras to keep the conversation seperate
-        #     audio_chunks.append(np.zeros(int(0.15 * 24000)))
-        #     continue
-        # print(f"Voice generation for part {step} ...")
-        # start_time = time.time()
-        # audio = processVoice(model, tokenizer, snac_model, chunk, description, part)
-        # generation_time = time.time() - start_time
-        # audio_duration = (len(audio) / 24000)
-        # print(f"Voice generation for part {step} ({audio_duration:.2f} sec) in {generation_time:.2f} sec")
-        # audio_chunks.append(audio)
-        # # Adding a pause between lines to keep the conversation consistent
-        # audio_chunks.append(np.zeros(int(0.1 * 24000)))
-        # if step % 5 == 0:
-        #     partial_audio = np.concatenate(audio_chunks)
-        #     file = outputPath+f"partial_{step}.wav"
-        #     sf.write(file, partial_audio, 24000)
-        #     print(f"Saving partial audio until {step}")
-        #
-        # rtf = generation_time / audio_duration if audio_duration > 0 else float('inf')
-        # input_lengths.append(input_length)
-        # generation_times.append(generation_time)
-        #
-        # writer.add_scalar("Evaluation/InputSize", input_length, step)
-        # writer.add_scalar("Evaluation/AudioDuration", audio_duration, step)
-        # writer.add_scalar("Performance/GenerationTime", generation_time, step)
-        # writer.add_scalar("Performance/RTF", rtf, step)
-        #
-        # if step > 2:
-        #     correlation = np.corrcoef(input_lengths, generation_times)[0, 1]
-        #     writer.add_scalar("Performance/InputDurationCorr", correlation, step)
+        input_length = len(chunk)
+        if input_length == 0:
+            # Adding a pause between paras to keep the conversation seperate
+            audio_chunks.append(np.zeros(int(0.15 * 24000)))
+            continue
+        print(f"Voice generation for part {step} ...")
+        start_time = time.time()
+        audio = processVoice(model, tokenizer, snac_model, chunk, description, part)
+        generation_time = time.time() - start_time
+        audio_duration = (len(audio) / 24000)
+        print(f"Voice generation for part {step} ({audio_duration:.2f} sec) in {generation_time:.2f} sec")
+        audio_chunks.append(audio)
+        # Adding a pause between lines to keep the conversation consistent
+        audio_chunks.append(np.zeros(int(0.1 * 24000)))
+        if step % 5 == 0:
+            partial_audio = np.concatenate(audio_chunks)
+            file = outputPath+f"partial_{step}.wav"
+            sf.write(file, partial_audio, 24000)
+            print(f"Saving partial audio until {step}")
+
+        rtf = generation_time / audio_duration if audio_duration > 0 else float('inf')
+        input_lengths.append(input_length)
+        generation_times.append(generation_time)
+
+        writer.add_scalar("Evaluation/InputSize", input_length, step)
+        writer.add_scalar("Evaluation/AudioDuration", audio_duration, step)
+        writer.add_scalar("Performance/GenerationTime", generation_time, step)
+        writer.add_scalar("Performance/RTF", rtf, step)
+
+        if step > 2:
+            correlation = np.corrcoef(input_lengths, generation_times)[0, 1]
+            writer.add_scalar("Performance/InputDurationCorr", correlation, step)
 
         step += 1
 
-    # writer.close()
+    writer.close()
 
-    # full_audio = np.concatenate(audio_chunks)
-    #
-    # file = outputPath+f"{title}.wav"
-    # sf.write(file, full_audio, 24000)
-    # print(f"Saved to {file}")
+    full_audio = np.concatenate(audio_chunks)
+
+    file = outputPath+f"{title}.wav"
+    sf.write(file, full_audio, 24000)
+    print(f"Saved to {file}")
 
