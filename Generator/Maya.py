@@ -88,96 +88,16 @@ def unpack_snac_from_7(snac_tokens: list) -> list:
     return [l1, l2, l3]
 
 
-def processVoice(model, tokenizer, snac_model, text, description, part):
-
-    prompt = build_prompt(tokenizer, description, text)
-
-    inputs = tokenizer(prompt, return_tensors="pt")
-    if torch.cuda.is_available():
-        inputs = {k: v.to("cuda") for k, v in inputs.items()}
-
-    with torch.inference_mode():
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=2048,  # Increase to let model finish naturally
-            min_new_tokens=28,  # At least 4 SNAC frames
-            temperature=0.4,
-            top_p=0.9,
-            repetition_penalty=1.1,  # Prevent loops
-            do_sample=True,
-            eos_token_id=CODE_END_TOKEN_ID,  # Stop at end of speech token
-            pad_token_id=tokenizer.pad_token_id,
-        )
-
-    generated_ids = outputs[0, inputs['input_ids'].shape[1]:].tolist()
-
-    # print(f"Generated {len(generated_ids)} tokens")
-
-    if CODE_END_TOKEN_ID in generated_ids:
-        eos_position = generated_ids.index(CODE_END_TOKEN_ID)
-        print(f"Part {part} EOS token found at position {eos_position}/{len(generated_ids)}")
-    else:
-        print(f"Part {part} EOS token not found!")
-
-    # Extract SNAC audio tokens
-    snac_tokens = extract_snac_codes(generated_ids)
-
-    # print(f"Extracted {len(snac_tokens)} SNAC tokens")
-
-    # Debug: Analyze token types
-    # snac_count = sum(1 for t in generated_ids if SNAC_MIN_ID <= t <= SNAC_MAX_ID)
-    # other_count = sum(1 for t in generated_ids if t < SNAC_MIN_ID or t > SNAC_MAX_ID)
-
-    # print(f"   SNAC tokens in output: {snac_count}")
-    # print(f"   Other tokens in output: {other_count}")
-
-    # Check for SOS token
-    # if CODE_START_TOKEN_ID in generated_ids:
-    #     sos_pos = generated_ids.index(CODE_START_TOKEN_ID)
-        # print(f"   SOS token at position: {sos_pos}")
-    # else:
-        # print(f"   No SOS token found in generated output!")
-
-    if len(snac_tokens) < 7:
-        print("Error: Not enough SNAC tokens generated")
-        return
-
-    # Unpack SNAC tokens to 3 hierarchical levels
-    levels = unpack_snac_from_7(snac_tokens)
-    # frames = len(levels[0])
-
-    # print(f"Unpacked to {frames} frames")
-    # print(f"   L1: {len(levels[0])} codes")
-    # print(f"   L2: {len(levels[1])} codes")
-    # print(f"   L3: {len(levels[2])} codes")
-
-    # Convert to tensors
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    codes_tensor = [
-        torch.tensor(level, dtype=torch.long, device=device).unsqueeze(0)
-        for level in levels
-    ]
-
-    # Generate final audio with SNAC decoder
-    # print("Decoding to audio...")
-    with torch.inference_mode():
-        z_q = snac_model.quantizer.from_codes(codes_tensor)
-        audio = snac_model.decoder(z_q)[0, 0].cpu().numpy()
-
-    # torch.cuda.empty_cache()
-    # torch.cuda.ipc_collect()
-
-    # print(f"\nVoice generated successfully!")
-
-    return audio
+def getDescription(MayaArgs, title):
+    description = ""
+    for character in MayaArgs.Characters:
+        if character.Name in title:
+            description = character.Description
+    print(f"Description: {description}")
+    return description
 
 
-def convert(Args, content, title):
-
-    MayaArgs = Args.Generator.Maya
-
-    MODEL_PATH = MayaArgs.ModelPath.__dict__[Args.Platform]
-
+def getModels(MODEL_PATH):
     print("Loading model...")
     model = AutoModelForCausalLM.from_pretrained(
         "maya-research/maya1",
@@ -193,20 +113,78 @@ def convert(Args, content, title):
         trust_remote_code=True
     )
     print(f"Model loaded: {len(tokenizer)} tokens in vocabulary")
-
     print("Loading SNAC audio decoder...")
     snac_model = SNAC.from_pretrained("hubertsiuzdak/snac_24khz").eval()
     if torch.cuda.is_available():
         snac_model = snac_model.to("cuda")
     print("SNAC decoder loaded")
+    return model, snac_model, tokenizer
 
-    description = ""
-    for character in MayaArgs.Characters:
-        if character.Name in title:
-            description = character.Description
-    print(f"Description: {description}")
+
+def processVoice(model, tokenizer, snac_model, text, description, part, maxTokens):
+
+    prompt = build_prompt(tokenizer, description, text)
+
+    inputs = tokenizer(prompt, return_tensors="pt")
+    if torch.cuda.is_available():
+        inputs = {k: v.to("cuda") for k, v in inputs.items()}
+
+    with torch.inference_mode():
+        outputs = model.generate(
+            **inputs,
+            max_new_tokens=maxTokens,  # Increase to let model finish naturally
+            min_new_tokens=28,  # At least 4 SNAC frames
+            temperature=0.4,
+            top_p=0.9,
+            repetition_penalty=1.1,  # Prevent loops
+            do_sample=True,
+            eos_token_id=CODE_END_TOKEN_ID,  # Stop at end of speech token
+            pad_token_id=tokenizer.pad_token_id,
+        )
+
+    generated_ids = outputs[0, inputs['input_ids'].shape[1]:].tolist()
+
+    if CODE_END_TOKEN_ID in generated_ids:
+        eos_position = generated_ids.index(CODE_END_TOKEN_ID)
+        print(f"Part {part} EOS token found at position {eos_position}/{len(generated_ids)}")
+    else:
+        print(f"Part {part} EOS token not found!")
+
+    # Extract SNAC audio tokens
+    snac_tokens = extract_snac_codes(generated_ids)
+
+    if len(snac_tokens) < 7:
+        print("Error: Not enough SNAC tokens generated")
+        return
+
+    levels = unpack_snac_from_7(snac_tokens)
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    codes_tensor = [
+        torch.tensor(level, dtype=torch.long, device=device).unsqueeze(0)
+        for level in levels
+    ]
+
+    with torch.inference_mode():
+        z_q = snac_model.quantizer.from_codes(codes_tensor)
+        audio = snac_model.decoder(z_q)[0, 0].cpu().numpy()
+
+    return audio
+
+
+def convert(Args, content, title):
+
+    MayaArgs = Args.Generator.Maya
+
+    MODEL_PATH = MayaArgs.ModelPath.__dict__[Args.Platform]
+
+    model, snac_model, tokenizer = getModels(MODEL_PATH)
+
+    description = getDescription(MayaArgs, title)
 
     outputPath = Args.Generator.AudioOutputPath.__dict__[Args.Platform]
+    batchSize = Args.Generator.BatchSize.__dict__[Args.Platform]
+    maxTokens = Args.Generator.Maya.MaxTokens
 
     chunks = createChunks(content)
     audio_chunks = []
@@ -221,11 +199,11 @@ def convert(Args, content, title):
         input_length = len(chunk)
         if input_length == 0:
             # Adding a pause between paras to keep the conversation seperate
-            audio_chunks.append(np.zeros(int(0.15 * 24000)))
+            audio_chunks.append(np.zeros(int(0.125 * 24000)))
             continue
         print(f"Voice generation for part {step} ...")
         start_time = time.time()
-        audio = processVoice(model, tokenizer, snac_model, chunk, description, part)
+        audio = processVoice(model, tokenizer, snac_model, chunk, description, part, maxTokens)
         generation_time = time.time() - start_time
         audio_duration = (len(audio) / 24000)
         print(f"Voice generation for part {step} ({audio_duration:.2f} sec) in {generation_time:.2f} sec")
@@ -242,14 +220,15 @@ def convert(Args, content, title):
         input_lengths.append(input_length)
         generation_times.append(generation_time)
 
-        writer.add_scalar("Evaluation/InputSize", input_length, step)
-        writer.add_scalar("Evaluation/AudioDuration", audio_duration, step)
-        writer.add_scalar("Performance/GenerationTime", generation_time, step)
-        writer.add_scalar("Performance/RTF", rtf, step)
+        if step % 10 == 0:
+            writer.add_scalar("Evaluation/InputSize", input_length, step)
+            writer.add_scalar("Evaluation/AudioDuration", audio_duration, step)
+            writer.add_scalar("Performance/GenerationTime", generation_time, step)
+            writer.add_scalar("Performance/RTF", rtf, step)
 
-        if step > 2:
-            correlation = np.corrcoef(input_lengths, generation_times)[0, 1]
-            writer.add_scalar("Performance/InputDurationCorr", correlation, step)
+            if step > 2:
+                correlation = np.corrcoef(input_lengths, generation_times)[0, 1]
+                writer.add_scalar("Performance/InputDurationCorr", correlation, step)
 
         step += 1
 
@@ -260,4 +239,3 @@ def convert(Args, content, title):
     file = outputPath+f"{title}.wav"
     sf.write(file, full_audio, 24000)
     print(f"Saved to {file}")
-

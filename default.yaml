@@ -10,12 +10,16 @@ Generator:
     Default: output/
     Kaggle: /kaggle/working/output/
     Colab: /content/drive/MyDrive/AI/Outputs/
-  BatchSize: 0
+  BatchSize:
+    Default: 1
+    Kaggle: 2
+    Colab: 1
   OpenAI:
     Action: False
     ChunkLimit: 1000
   Maya:
     Action: True
+    MaxTokens: 2048
     ModelPath:
       Default: /Users/ykamoji/Documents/open-ai-audio-transcription/models/
       Kaggle: /kaggle/working/open-ai-audio-transcription/models/

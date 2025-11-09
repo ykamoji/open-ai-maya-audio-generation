@@ -19,7 +19,7 @@ def convert(Args, content, title):
 
     client = OpenAI(api_key=os.environ["OPEN_AI_KEY"])
 
-    chunks = createChunks(content, Args.Generator.OpenAI.ChunkLimit)
+    chunks = createChunks(content, limit=Args.Generator.OpenAI.ChunkLimit)
 
     part_count = 0
     audio_files = []
