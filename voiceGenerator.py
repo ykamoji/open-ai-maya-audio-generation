@@ -49,7 +49,7 @@ class VoiceGenerator:
 
         graph = GraphAPI(self.Args.Graph)
 
-        for page in pages:
+        for pageNo, page in enumerate(pages):
             if not self.Args.Graph.RefreshPages and self.CONTENT_CACHE and page["title"] in self.CONTENT_CACHE:
                 content = self.CONTENT_CACHE[page["title"]]
             else:
@@ -61,14 +61,15 @@ class VoiceGenerator:
 
             # print(content)
 
-            print(f"Downloaded the content {page['title']} : {content_stats(content)}")
+            print(f"Processing the content {page['title']} : {content_stats(content)}")
 
             if self.Args.Generator.OpenAI.Action:
                 openAIConvert(self.Args, content, page["title"])
             elif self.Args.Generator.Maya.Action:
                 mayaConvert(self.Args, content, page["title"])
 
-            time.sleep(30)
+            if pageNo != len(pages) - 1:
+                time.sleep(30)
 
 
 if __name__ == "__main__":

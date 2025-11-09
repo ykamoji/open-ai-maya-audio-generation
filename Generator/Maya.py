@@ -1,9 +1,11 @@
 import torch
+import time
+import soundfile as sf
+import numpy as np
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from torch.utils.tensorboard import SummaryWriter
 from Generator.utils import createChunks
 from snac import SNAC
-import wave
-import soundfile as sf
 
 CODE_START_TOKEN_ID = 128257
 CODE_END_TOKEN_ID = 128258
@@ -83,30 +85,18 @@ def unpack_snac_from_7(snac_tokens: list) -> list:
     return [l1, l2, l3]
 
 
-def processVoice(model, tokenizer, snac_model, text, description):
-    # Load the best open source voice AI model
-    print("\n[3/3] Generating speech...")
-    print(f"Description: {description}")
-    # print(f"Text: {text}")
+def processVoice(model, tokenizer, snac_model, text, description, part):
 
-    # Create prompt with proper formatting
     prompt = build_prompt(tokenizer, description, text)
 
-    # Debug: Show prompt details
-    print(f"\nPrompt preview (first 200 chars):")
-    print(f"   {repr(prompt[:200])}")
-    print(f"   Prompt length: {len(prompt)} chars")
-
-    # Generate emotional speech
     inputs = tokenizer(prompt, return_tensors="pt")
-    print(f"   Input token count: {inputs['input_ids'].shape[1]} tokens")
     if torch.cuda.is_available():
         inputs = {k: v.to("cuda") for k, v in inputs.items()}
 
     with torch.inference_mode():
         outputs = model.generate(
             **inputs,
-            max_new_tokens=8192,  # Increase to let model finish naturally
+            max_new_tokens=2048,  # Increase to let model finish naturally
             min_new_tokens=28,  # At least 4 SNAC frames
             temperature=0.4,
             top_p=0.9,
@@ -116,37 +106,34 @@ def processVoice(model, tokenizer, snac_model, text, description):
             pad_token_id=tokenizer.pad_token_id,
         )
 
-    # Extract generated tokens (everything after the input prompt)
     generated_ids = outputs[0, inputs['input_ids'].shape[1]:].tolist()
 
-    print(f"Generated {len(generated_ids)} tokens")
+    # print(f"Generated {len(generated_ids)} tokens")
 
-    # Debug: Check what tokens we got
-    print(f"   First 20 tokens: {generated_ids[:20]}")
-    print(f"   Last 20 tokens: {generated_ids[-20:]}")
-
-    # Check if EOS was generated
     if CODE_END_TOKEN_ID in generated_ids:
         eos_position = generated_ids.index(CODE_END_TOKEN_ID)
-        print(f" EOS token found at position {eos_position}/{len(generated_ids)}")
+        print(f"Part {part} EOS token found at position {eos_position}/{len(generated_ids)}")
+    else:
+        print(f"Part {part} EOS token not found!")
 
     # Extract SNAC audio tokens
     snac_tokens = extract_snac_codes(generated_ids)
 
-    print(f"Extracted {len(snac_tokens)} SNAC tokens")
+    # print(f"Extracted {len(snac_tokens)} SNAC tokens")
 
     # Debug: Analyze token types
-    snac_count = sum(1 for t in generated_ids if SNAC_MIN_ID <= t <= SNAC_MAX_ID)
-    other_count = sum(1 for t in generated_ids if t < SNAC_MIN_ID or t > SNAC_MAX_ID)
-    print(f"   SNAC tokens in output: {snac_count}")
-    print(f"   Other tokens in output: {other_count}")
+    # snac_count = sum(1 for t in generated_ids if SNAC_MIN_ID <= t <= SNAC_MAX_ID)
+    # other_count = sum(1 for t in generated_ids if t < SNAC_MIN_ID or t > SNAC_MAX_ID)
+
+    # print(f"   SNAC tokens in output: {snac_count}")
+    # print(f"   Other tokens in output: {other_count}")
 
     # Check for SOS token
-    if CODE_START_TOKEN_ID in generated_ids:
-        sos_pos = generated_ids.index(CODE_START_TOKEN_ID)
-        print(f"   SOS token at position: {sos_pos}")
-    else:
-        print(f"   No SOS token found in generated output!")
+    # if CODE_START_TOKEN_ID in generated_ids:
+    #     sos_pos = generated_ids.index(CODE_START_TOKEN_ID)
+        # print(f"   SOS token at position: {sos_pos}")
+    # else:
+        # print(f"   No SOS token found in generated output!")
 
     if len(snac_tokens) < 7:
         print("Error: Not enough SNAC tokens generated")
@@ -154,12 +141,12 @@ def processVoice(model, tokenizer, snac_model, text, description):
 
     # Unpack SNAC tokens to 3 hierarchical levels
     levels = unpack_snac_from_7(snac_tokens)
-    frames = len(levels[0])
+    # frames = len(levels[0])
 
-    print(f"Unpacked to {frames} frames")
-    print(f"   L1: {len(levels[0])} codes")
-    print(f"   L2: {len(levels[1])} codes")
-    print(f"   L3: {len(levels[2])} codes")
+    # print(f"Unpacked to {frames} frames")
+    # print(f"   L1: {len(levels[0])} codes")
+    # print(f"   L2: {len(levels[1])} codes")
+    # print(f"   L3: {len(levels[2])} codes")
 
     # Convert to tensors
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -169,36 +156,25 @@ def processVoice(model, tokenizer, snac_model, text, description):
     ]
 
     # Generate final audio with SNAC decoder
-    print("\n[4/4] Decoding to audio...")
+    # print("Decoding to audio...")
     with torch.inference_mode():
         z_q = snac_model.quantizer.from_codes(codes_tensor)
         audio = snac_model.decoder(z_q)[0, 0].cpu().numpy()
 
-    duration_sec = len(audio) / 24000
-    print(f"Audio generated: {len(audio)} samples ({duration_sec:.2f}s)")
+    # torch.cuda.empty_cache()
+    # torch.cuda.ipc_collect()
 
-    torch.cuda.empty_cache()
-    torch.cuda.ipc_collect()
-
-    print(f"\nVoice generated successfully!")
+    # print(f"\nVoice generated successfully!")
 
     return audio
 
 
 def convert(Args, content, title):
-    """
-    Example usage of Maya-1-Voice streaming inference.
 
-    This demonstrates:
-    1. Model initialization
-    2. SNAC decoder setup
-    3. Streaming generation
-    4. Audio chunk handling
-    """
+    MayaArgs = Args.Generator.Maya
 
-    MODEL_PATH = Args.Generator.Maya.ModelPath
-
-    print("\n[1/3] Loading Maya1 model...")
+    MODEL_PATH = MayaArgs.ModelPath
+    print("Loading model...")
     model = AutoModelForCausalLM.from_pretrained(
         "maya-research/maya1",
         cache_dir=MODEL_PATH,
@@ -206,6 +182,7 @@ def convert(Args, content, title):
         device_map="auto",
         trust_remote_code=True
     )
+    model.eval()
     tokenizer = AutoTokenizer.from_pretrained(
         "maya-research/maya1",
         cache_dir=MODEL_PATH,
@@ -213,37 +190,65 @@ def convert(Args, content, title):
     )
     print(f"Model loaded: {len(tokenizer)} tokens in vocabulary")
 
-    # Load SNAC audio decoder (24kHz)
-    print("\n[2/3] Loading SNAC audio decoder...")
+    print("Loading SNAC audio decoder...")
     snac_model = SNAC.from_pretrained("hubertsiuzdak/snac_24khz").eval()
     if torch.cuda.is_available():
         snac_model = snac_model.to("cuda")
     print("SNAC decoder loaded")
 
-    # Design your voice with natural language
-    description = ("Realistic male voice in the 30s age with american accent. Normal pitch, warm timbre, "
-                   "conversational pacing.")
+    description = ""
+    for character in MayaArgs.Characters:
+        if character.Name in title:
+            description = character.Description
+    print(f"Description: {description}")
 
-    chunks = createChunks(content, Args.Generator.Maya.ChunkLimit)[:2]
-
+    outputPath = Args.Generator.AudioOutputPath
+    chunks = createChunks(content)
     audio_chunks = []
+    input_lengths = []
+    generation_times = []
+
+    writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
+
+    step = 0
     for part, chunk in enumerate(chunks):
-        audio = processVoice(model, tokenizer, snac_model, chunk, description)
+        input_length = len(chunk)
+        if input_length == 0:
+            # Adding a pause between paras to keep the conversation seperate
+            audio_chunks.append(np.zeros(int(0.3 * 24000)))
+            continue
+        step += 1
+        print(f"Voice generation for part {step} ...")
+        start_time = time.time()
+        audio = processVoice(model, tokenizer, snac_model, chunk, description, part)
+        generation_time = time.time() - start_time
+        audio_duration = (len(audio) / 24000)
+        print(f"Voice generation for part {step} ({audio_duration:.2f} sec) in {generation_time:.2f} sec")
         audio_chunks.append(audio)
-        if part % 5 == 0:
-            partial_audio = b''.join(audio_chunks)
-            sf.write("partial.wav", partial_audio, 24000)
+        # Adding a pause between lines to keep the conversation consistent
+        audio_chunks.append(np.zeros(int(0.2 * 24000)))
+        if step % 5 == 0:
+            partial_audio = np.concatenate(audio_chunks)
+            file = outputPath+f"partial_{step}.wav"
+            sf.write(file, partial_audio, 24000)
+            print(f"Saving partial audio until {step}")
 
-    full_audio = b''.join(audio_chunks)
-    output_file = f"{title}.wav"
+        rtf = generation_time / audio_duration if audio_duration > 0 else float('inf')
+        input_lengths.append(input_length)
+        generation_times.append(generation_time)
+        correlation = np.corrcoef(input_lengths, generation_times)[0, 1]
 
-    sf.write(output_file, full_audio, 24000)
+        writer.add_scalar("Evaluation/InputSize", input_length, step)
+        writer.add_scalar("Evaluation/AudioDuration", audio_duration, step)
+        writer.add_scalar("Performance/GenerationTime", generation_time, step)
+        writer.add_scalar("Performance/RTF", rtf, step)
+        writer.add_scalar("Performance/InputDurationCorr", correlation, step)
 
-    with wave.open('2'+output_file, 'wb') as wav:
-        wav.setnchannels(1)
-        wav.setsampwidth(2)
-        wav.setframerate(24000)
-        wav.writeframes(full_audio)
+    writer.close()
 
-    print(f"💾 Saved to {output_file}")
+    full_audio = np.concatenate(audio_chunks)
+
+    file = outputPath+f"{title}.wav"
+    sf.write(file, full_audio, 24000)
+    print(f"Saved to {file}")
 

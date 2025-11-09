@@ -3,5 +3,7 @@ python-dotenv
 openai==2.7.1
 pydub==0.25.1
 transformers==4.57.1
-vllm
 snac
+soundfile
+numpy
+tensorboard

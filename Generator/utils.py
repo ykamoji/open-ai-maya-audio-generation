@@ -9,41 +9,48 @@ def content_stats(content):
     return f"{count} characters, {word_count} words, {lines} lines, {paras} paragraphs"
 
 
-def createChunks(content, limit):
+def createChunks(content, limit=None):
 
-    paragraphs = [p.strip() for p in content.split("\n\n") if p.strip()]
     chunks = []
-    current_chunk = ""
-    for para in paragraphs:
-        # If single paragraph longer than max_chars, break it manually
-        if len(para) > limit:
-            # Split that paragraph into smaller sub-chunks
-            for i in range(0, len(para), limit):
-                sub_chunk = para[i:i + limit]
-                if current_chunk:
-                    chunks.append(current_chunk.strip())
-                    current_chunk = ""
-                chunks.append(sub_chunk.strip())
-            continue
+    paragraphs = [p.strip("\n").strip() for p in content.split("\n\n") if p.strip()]
+    if limit is not None:
+        for para in paragraphs:
+            if len(para) >= limit:
+                lines = [line for line in para.split(".") if line.strip()]
+                counter = 0
+                i = 0
+                split_pos = [0]
+                while i < len(lines):
+                    counter += len(lines[i])
+                    if counter >= limit:
+                        split_pos.append(i - 1)
+                        counter = len(lines[i])
+                    i += 1
 
-        # If adding this paragraph exceeds limit, start new chunk
-        if len(current_chunk) + len(para) + 2 > limit:
-            chunks.append(current_chunk.strip())
-            current_chunk = para
-        else:
-            if current_chunk:
-                current_chunk += "\n\n" + para
+                split_len = len(split_pos)
+                for s in range(1, split_len):
+                    begin = split_pos[s - 1]
+                    end = min(split_pos[s], split_len)
+                    chunks.append(". ".join(lines[begin:end]))
             else:
-                current_chunk = para
+                chunks.append(para)
 
-    if current_chunk:
-        chunks.append(current_chunk.strip())
+        # Safe check
+        for index, chunk in enumerate(chunks):
+            if len(chunk) >= limit:
+                msg = f"Chuck {index} {chunk[:20]} isn't under the chunk limit"
+                raise Exception(msg)
+
+    else:
+        for para in paragraphs:
+            lines = [line.strip().replace('.','') + '.' for line in para.split(". ") if line.strip()]
+            chunks.extend(lines)
+            chunks.append('')
 
     return chunks
 
 
 def merge_audio(files, output_file, format="mp3"):
-
     combined = AudioSegment.empty()
     for file in files:
         print(f"Merging {file}...")
