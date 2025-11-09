@@ -6,13 +6,13 @@ Graph:
 Generator:
   Pages: 1 # number(s) or empty
   PageNo:
-  AudioOutputPath: /content/drive/MyDrive/AI/Outputs/
+  AudioOutputPath: output/ #/content/drive/MyDrive/AI/Outputs/
   OpenAI:
     Action: False
     ChunkLimit: 1000
   Maya:
     Action: True
-    ModelPath: /content/drive/MyDrive/AI/Models #/Users/ykamoji/Documents/open-ai-audio-transcription/models/
+    ModelPath: models/ #/content/drive/MyDrive/AI/Models #/Users/ykamoji/Documents/open-ai-audio-transcription/models/
     Characters:
       - Name: David
         Description: "Seductively character, Male voice in their 30s with a American accent. normal pitch, gravelly timbre, conversational pacing, casual tone at mid intensity"
