@@ -8,9 +8,12 @@ Generator:
   PageNo:
   AudioOutputPath:
     Default: output/
-    Kaggle: /kaggle/working/output/
+    Kaggle: /kaggle/working/open-ai-audio-transcription/output/
     Colab: /content/drive/MyDrive/AI/Outputs/
-  BatchSize: 0
+  GPU:
+    Default: 0
+    Kaggle: 2
+    Colab: 1
   OpenAI:
     Action: False
     ChunkLimit: 1000
@@ -26,4 +29,4 @@ Generator:
       - Name: Vanessa
         Description: "Seductively character, Female voice in their 30s with a American accent. normal pitch, deep timbre, brisk pacing, casual tone at mid intensity"
       - Name: Blake
-        Description: "Seductively character, Male voice in their 30s with a American accent. normal pitch, throaty timbre, brisk pacing, casual tone at mid intensity"
+        Description: "Dark villain character, Male voice in their 30s with a American accent. normal pitch, throaty timbre, brisk pacing, casual tone at mid intensity"
