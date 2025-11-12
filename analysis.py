@@ -24,31 +24,35 @@ def analysis():
         for param in params:
             stats[param]["count"] += data["stats"][param]
 
-            if mx[param] < data["stats"][param]:
-                mx[param] = data["stats"][param]
-                mx["title"] = page
+            if len(pages) > 1:
+                if mx[param] < data["stats"][param]:
+                    mx[param] = data["stats"][param]
+                    mx["title"] = page
 
-            if mn[param] > data["stats"][param]:
-                mn[param] = data["stats"][param]
-                mn["title"] = page
+                if mn[param] > data["stats"][param]:
+                    mn[param] = data["stats"][param]
+                    mn["title"] = page
 
     for param in params:
         stats[param]["avg"] = stats[param]["count"] / len(pages)
-        stats[param]["max"] = mx[param]
-        stats[param]["min"] = mn[param]
-        stats[param]["min_title"] = mn["title"]
-        stats[param]["max_title"] = mx["title"]
+
+        if len(pages) > 1:
+            stats[param]["max"] = mx[param]
+            stats[param]["min"] = mn[param]
+            stats[param]["min_title"] = mn["title"]
+            stats[param]["max_title"] = mx["title"]
 
     print("Statistics:")
     for param in params:
         print(f"\t{param}:")
         for metric in metrics:
             extra = ""
-            if metric == "max":
-                extra = f"""({stats[param]["max_title"]})"""
+            if len(pages) > 1:
+                if metric == "max":
+                    extra = f"""({stats[param]["max_title"]})"""
 
-            if metric == "min":
-                extra = f"""({stats[param]["min_title"]})"""
+                if metric == "min":
+                    extra = f"""({stats[param]["min_title"]})"""
 
             print(f"\t\t{metric}: {stats[param][metric]:.2f} {extra}")
     print("\n\n")
