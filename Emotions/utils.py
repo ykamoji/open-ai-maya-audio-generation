@@ -66,6 +66,7 @@ AUTO_CORRECT_MAP = {
     "angry_sigh": "angry",
     "rage": "angry",
     "surprised": "gasp",
+    "surprise": "gasp",
     "shocked": "gasp",
     "wow": "gasp",
     "soft": "whisper",
@@ -77,6 +78,15 @@ AUTO_CORRECT_MAP = {
     "laughing": "laugh",
     "lol": "laugh",
     "haha": "laugh",
+    "concerned": "curious",
+    "disappointed": "sigh",
+    "sadness": "cry",
+    "anxious": "gulp",
+    "nervous": "gulp",
+    "tense": "gulp",
+    "relieved": "exhale",
+    "suspicious": "curious",
+    "thrilled": "excited"
 }
 
 

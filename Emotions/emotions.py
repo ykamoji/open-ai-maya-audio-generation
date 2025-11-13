@@ -74,7 +74,7 @@ def weighted_fuzzy_match(raw, allowed):
             best_score = score
             best_tag = tag
 
-    return best_tag or "curious"
+    return best_tag
 
 
 def autocorrect_tag(tag):
@@ -91,7 +91,8 @@ def autocorrect_tag(tag):
         return f"<{t}>"
 
     best = weighted_fuzzy_match(t, ALLOWED_TAGS)
-    return f"<{best}>"
+
+    return f"<{best}>" if best else ""
 
 
 def remove_and_autocorrect_tags(text):
@@ -162,8 +163,11 @@ def add_global_feedback():
 
 
 def save_global_stats():
-    df = pd.DataFrame.from_dict(global_tag_counts, orient="index", columns=["count"]).reset_index()
-    df.rename(columns={"index": "tag"}, inplace=True)
+    df = (pd.DataFrame.from_dict(global_tag_counts, orient="index", columns=["count"])
+        .reset_index()
+        .rename(columns={"index": "tag"})
+    )
+    df = df.sort_values("count", ascending=False)
     df.to_csv(TAG_STATS_PATH, index=False)
 
 
@@ -186,9 +190,12 @@ def save_unknown_tag_log():
             )
         except Exception:
             merged = df
-        merged.to_csv(UNKNOWN_TAG_LOG_PATH, index=False)
     else:
-        df.to_csv(UNKNOWN_TAG_LOG_PATH, index=False)
+        merged = df
+
+    merged = merged.sort_values("count", ascending=False)
+    merged.to_csv(UNKNOWN_TAG_LOG_PATH, index=False)
+
 
 def generate_emotion_lines(model, tokenizer, paragraph):
     global global_tag_counts

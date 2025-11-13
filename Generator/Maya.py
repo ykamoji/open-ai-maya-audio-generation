@@ -106,7 +106,7 @@ def getDescription(MayaArgs, title):
 
 def getModels(MODEL_PATH):
     model = AutoModelForCausalLM.from_pretrained(
-        "maya-research/maya1",
+        "maya-research/maya1" if platform != "Kaggle" else '/kaggle/input/maya/transformers/1/1',
         cache_dir=MODEL_PATH,
         torch_dtype=torch.float16,
         # dtype="float16",
@@ -121,7 +121,7 @@ def getModels(MODEL_PATH):
 
 def getTokenizer(MODEL_PATH):
     tokenizer = AutoTokenizer.from_pretrained(
-        "maya-research/maya1",
+        "maya-research/maya1" if platform != "Kaggle" else '/kaggle/input/maya/transformers/1/1',
         cache_dir=MODEL_PATH,
         trust_remote_code=True
     )
@@ -130,7 +130,7 @@ def getTokenizer(MODEL_PATH):
 
 
 def delete_previous_outputs(outputPath, step):
-    files = glob.glob(outputPath + "partial_*.wav")
+    files = glob.glob(outputPath + "audios/partial_*.wav")
     files.sort(key=os.path.getmtime)
     files_to_delete = files[:-2]
     if files_to_delete and step > 0 and step % LOG_STEPS == 0:
@@ -143,6 +143,9 @@ def delete_previous_outputs(outputPath, step):
 
 def convert(Args, content, title, outputPath):
     MayaArgs = Args.Generator.Maya
+
+    global platform
+    platform = Args.Platform
 
     MODEL_PATH = MayaArgs.ModelPath.__dict__[Args.Platform]
 
@@ -194,7 +197,7 @@ def processVoice(model, device, tokenizer, snac_model, text, description, part):
         else:
             EOS_FOUND = False
             max_new_tokens *= 2
-            print(f"Part {part} {text[:25]}... EOS token not found. Running again with max_token {max_new_tokens}")
+            print(f"Part {part} {text[:50]}... EOS token not found. Running again with max_token {max_new_tokens}")
 
     # Extract SNAC audio tokens
     snac_tokens = extract_snac_codes(generated_ids)

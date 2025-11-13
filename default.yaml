@@ -28,7 +28,7 @@ Generator:
     Action: True
     ModelPath:
       Default: /Users/ykamoji/Documents/open-ai-maya-audio-generation/models/
-      Kaggle: # For Kaggle, use internal cahce
+      Kaggle: # For Kaggle, use internal cache
       Colab: /content/drive/MyDrive/AI/Models/
     Characters:
       - Name: David
