@@ -108,8 +108,8 @@ def getModels(MODEL_PATH):
     model = AutoModelForCausalLM.from_pretrained(
         "maya-research/maya1",
         cache_dir=MODEL_PATH,
-        # torch_dtype=torch.float16,
-        dtype="float16",
+        torch_dtype=torch.float16,
+        # dtype="float16",
         trust_remote_code=True
     )
     model.eval()

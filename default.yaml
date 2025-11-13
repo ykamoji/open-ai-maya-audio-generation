@@ -3,19 +3,19 @@ Graph:
   SectionName: "Book 5"
   RefreshPages: False
   EnvPath:
-  PageLimit: # number(s) or empty
+  PageLimit: 1 # number(s) or empty
 Emotions:
-  Quantize: True
+  Quantize: False
   ModelPath:
     Default: /Users/ykamoji/Documents/open-ai-maya-audio-generation/models/
-    Kaggle: /kaggle/working/open-ai-maya-audio-generation/models/
+    Kaggle: /kaggle/working/models/
     Colab: /content/drive/MyDrive/AI/Models/
 Generator:
   PageLimit: 1 # number(s) or empty
   PageNo:
   AudioOutputPath:
     Default: output/
-    Kaggle: /kaggle/working/open-ai-maya-audio-generation/output/
+    Kaggle: /kaggle/working/output/
     Colab: /content/drive/MyDrive/AI/Outputs/
   GPU:
     Default: 0
@@ -28,7 +28,7 @@ Generator:
     Action: True
     ModelPath:
       Default: /Users/ykamoji/Documents/open-ai-maya-audio-generation/models/
-      Kaggle: /kaggle/working/open-ai-maya-audio-generation/models/
+      Kaggle: /kaggle/working/models/
       Colab: /content/drive/MyDrive/AI/Models/
     Characters:
       - Name: David
