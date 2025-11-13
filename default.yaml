@@ -5,7 +5,7 @@ Graph:
   EnvPath:
   PageLimit:  2 # number(s) or empty
 Emotions:
-  Quantize: True
+  Quantize: False
   ModelPath:
     Default: /Users/ykamoji/Documents/open-ai-maya-audio-generation/models/
     Kaggle: /kaggle/working/models/
