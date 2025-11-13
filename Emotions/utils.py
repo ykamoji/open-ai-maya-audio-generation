@@ -29,6 +29,7 @@ TAG_PENALTY_WEIGHTS = {
 
 AUTO_CORRECT_MAP = {
     "happy": "giggle",
+    "excite:": "excited",
     "joy": "giggle",
     "joyful": "giggle",
     "sad": "cry",

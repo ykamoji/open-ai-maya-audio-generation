@@ -71,7 +71,6 @@ class VoiceGenerator:
             print(f"Need to run spellcheck and grammars for {len(contents_to_process)} pages")
             spell_checked_paragraphs = sanitise(self.Args, contents_to_process)
             for page in spell_checked_paragraphs:
-                page['content'].insert(0, self.TITLE_CACHE[notebook_name][section_name][page["title"]][0])
                 self.VOICE_CACHE[page["title"]] = page['content']
 
             if update_voice_cache: updateCache('voiceCache.json', self.VOICE_CACHE)
@@ -93,6 +92,7 @@ class VoiceGenerator:
 
             emotion_paragraphs = addEmotions(self.Args, contents_to_process)
             for page in emotion_paragraphs:
+                page['content'].insert(0, self.TITLE_CACHE[notebook_name][section_name][page["title"]][0])
                 self.EMOTION_CACHE[page["title"]] = page['content']
 
             if update_emotion_cache: updateCache('emotionCache.json', self.EMOTION_CACHE)

@@ -10,44 +10,27 @@ from Emotions.utils import getModelAndTokenizer, clean_output, ALLOWED_TAGS, AUT
 
 TAG_STATS_PATH = 'emotion_tag_stats.csv'
 
-prompt = """You are an emotion annotator. 
-Allowed tags:
-<laugh>, <laugh_harder>, <sigh>, <chuckle>, <gasp>, <angry>, <excited>, <whisper>, <cry>, <scream>, <sing>, <snort>, <exhale>, <gulp>, <giggle>, <sarcastic>, <curious>
-
-Your task: 
-Insert the above allowed emotion tags after words or short phrases in the paragraph below.
-
+prompt = """
+You are an expressive text enhancer that adds emotional cues to writing.
+Your task:
+Insert the most appropriate emotion tags **after** specific words or phrases in a paragraph.
+Emotion tags you may use: <laugh>, <laugh_harder>, <sigh>, <chuckle>, <gasp>, <angry>, <excited>, <whisper>, <cry>, <scream>, <sing>, <snort>, <exhale>, <gulp>, <giggle>, <sarcastic>, <curious>.
 Rules:
-1. Keep the original text exactly; do not rewrite or summarize.
-2. Add emotion tags only where a clear emotional cue exists.
-3. Neutral or factual sentences usually need no tags.
-4. Avoid overusing the same tag unless strongly justified.
-5. You may add multiple tags per paragraph when emotions shift naturally.
-6. Prefer variety of emotion tags within and across paragraphs.
-7. Never repeat a tag back-to-back.
-8. Do not invent new tags; only use the allowed set.
- 
-Examples:
-
-Input:
-He looked around the empty hall. "So this is it," he said softly.
-
-Answer:
-He looked around the empty hall. <exhale> "So this is it," he said softly. <sigh>
-
----
-
-Input:
-“Oh great, another deadline,” she muttered as her laptop froze again.
-
-Answer:
-“Oh great, another deadline,” she muttered as her laptop froze again. <sarcastic> <angry>
-
----
-
-Now tag this paragraph:
-{paragraph}
-Answer:
+1. Keep the original text exactly as written. Do not paraphrase or rewrite.
+2. Insert emotion tags only where natural emotional cues are implied.
+3. Add the tag **right after** the word or phrase it applies to, before punctuation if it fits better.
+4. Use tags sparingly and only when contextually appropriate.
+5. Reflect tone (anger, excited, curious, laugh, sarcastic, etc.) based on clues in the text.
+Example 1:
+Input: "He looked at the strange machine and tilted his head."
+Answer: "He looked at the strange machine <curious> and tilted his head."
+Example 2:
+Input: "I can’t believe you actually did that. You’re unbelievable!"
+Answer: "I can’t believe you actually did that. <gasp> You’re unbelievable! <laugh>"
+Example 3:
+Input: "I tried so hard, but it still wasn’t enough."
+Answer: "I tried so hard, <sigh> but it still wasn’t enough <cry>."
+Now process the following paragraph and add the most appropriate emotion tags:
 """
 
 if os.path.exists('emotion_tag_stats.csv'):
@@ -139,11 +122,11 @@ def build_penalty_feedback():
     return feedback
 
 
-def add_global_feedback(prompt):
+def add_global_feedback():
     if random.random() < 0.70:  # 70% of the time: no penalty → prevents monotonic bias
-        return prompt
+        return prompt + "{}\nAnswer:"
     feedback = build_penalty_feedback()
-    return prompt + feedback if feedback else prompt
+    return (prompt + feedback if feedback else prompt) + "{}\nAnswer:"
 
 
 def save_global_stats():
@@ -153,11 +136,12 @@ def save_global_stats():
 
 
 def generate_emotion_lines(model, tokenizer, paragraph):
-    batch_prompts = prompt.replace("{}", paragraph)
     global global_tag_counts
     tagged = []
 
-    batch_prompts = add_global_feedback(batch_prompts)
+    batch_prompts = add_global_feedback()
+
+    batch_prompts = batch_prompts.replace("{}", paragraph)
 
     inputs = tokenizer(batch_prompts, return_tensors="pt", padding=True, truncation=True, max_length=4096).to(
         model.device)
@@ -165,17 +149,17 @@ def generate_emotion_lines(model, tokenizer, paragraph):
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
-            max_new_tokens=2048,
-            temperature=0.0,
+            max_new_tokens=4096,
             do_sample=False,
-            repetition_penalty=1.6,
+            repetition_penalty=1.1,
             pad_token_id=tokenizer.eos_token_id
         )
 
     decoded = tokenizer.batch_decode(outputs, skip_special_tokens=True)
     text = [d.strip() for d in decoded]
-    text = clean_output(text, [prompt])
+    text = clean_output(text, [prompt])[0]
     clean_text = moderate_tag_reuse(text)
+    clean_text = remove_and_autocorrect_tags(clean_text)
     tags = extract_tags(clean_text)
     for t in tags:
         if t in ALLOWED_TAGS:
