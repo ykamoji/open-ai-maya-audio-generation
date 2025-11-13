@@ -103,7 +103,7 @@ def extract_tags(text):
     return re.findall(r'<([^>]+)>', text)
 
 
-def moderate_tag_reuse(text, max_repeat_per_tag=4):
+def moderate_tag_reuse(text, max_repeat_per_tag=2):
     counts = Counter()
     result = []
     tokens = re.split(r'(<[^>]+>)', text)
