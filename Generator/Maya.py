@@ -108,11 +108,12 @@ def getModels(MODEL_PATH):
     print("Loading model...")
     if platform == 'Kaggle':
         model = AutoModelForCausalLM.from_pretrained(
-            MODEL_PATH,
+            MODEL_PATH + "models--maya-research--maya1/models--maya-research--maya1/",
             torch_dtype=torch.float16,
             # dtype="float16",
             trust_remote_code=True
         )
+        snac_model = SNAC.from_pretrained(MODEL_PATH + "models--hubertsiuzdak--snac_24khz/models--hubertsiuzdak--snac_24khz/")
     else:
         model = AutoModelForCausalLM.from_pretrained(
             "maya-research/maya1",
@@ -121,11 +122,12 @@ def getModels(MODEL_PATH):
             # dtype="float16",
             trust_remote_code=True
         )
+        snac_model = SNAC.from_pretrained("hubertsiuzdak/snac_24khz", cache_dir=MODEL_PATH)
+
+    snac_model.eval()
     model.eval()
     tokenizer = getTokenizer(MODEL_PATH)
-    print("Loading SNAC audio decoder...")
-    snac_model = SNAC.from_pretrained("hubertsiuzdak/snac_24khz",  cache_dir=MODEL_PATH).eval()
-    print("SNAC decoder loaded")
+
     return model, snac_model, tokenizer
 
 
