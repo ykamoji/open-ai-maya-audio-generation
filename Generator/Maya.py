@@ -3,7 +3,6 @@ import os
 import glob
 import time
 import warnings
-import soundfile as sf
 import numpy as np
 import threading
 import queue
@@ -143,14 +142,12 @@ def delete_previous_outputs(outputPath, step):
                 pass
 
 
-def convert(Args, content, title):
+def convert(Args, content, title, outputPath):
     MayaArgs = Args.Generator.Maya
 
     MODEL_PATH = MayaArgs.ModelPath.__dict__[Args.Platform]
 
     description = getDescription(MayaArgs, title)
-
-    outputPath = Args.Generator.AudioOutputPath.__dict__[Args.Platform]
 
     GPUCount = Args.Generator.GPU.__dict__[Args.Platform]
 
@@ -223,14 +220,14 @@ def processVoice(model, device, tokenizer, snac_model, text, description, part):
 
 def saveAudio(outputPath, audio_chunks, title):
     silence = np.zeros(int(0.1 * 24000))
-    full_audio = []
-    for i, audio in enumerate(audio_chunks):
+    full_audio = [audio_chunks[0], np.zeros(int(0.4 * 24000))]
+    for audio in audio_chunks[1:-1]:
         full_audio.append(audio)
         full_audio.append(silence)
-
+    full_audio.append(audio_chunks[-1])
     full_audio = np.concatenate(full_audio)
-    file = outputPath + f"{title}.wav"
-    sf.write(file, full_audio, 24000)
+    file = outputPath + f"audios/{title}.npy"
+    np.save(file, full_audio)
 
 
 def cpuProcess(chunks, description, model, outputPath, snac_model, title, tokenizer):
@@ -256,9 +253,6 @@ def cpuProcess(chunks, description, model, outputPath, snac_model, title, tokeni
         audio_duration = (len(audio) / 24000)
         # print(f"Voice generation for part {step}/{total} ({audio_duration:.2f} sec) in {generation_time:.2f} sec")
         audio_chunks.append(audio)
-        # Adding a pause between lines to keep the conversation consistent
-        # audio_chunks.append(np.zeros(int(0.1 * 24000)))
-
         rtf = generation_time / audio_duration if audio_duration > 0 else float('inf')
         input_lengths.append(input_length)
         generation_times.append(generation_time)
@@ -275,14 +269,9 @@ def cpuProcess(chunks, description, model, outputPath, snac_model, title, tokeni
 
             delete_previous_outputs(outputPath, step)
             saveAudio(outputPath, audio_chunks, f"partial_{step}")
-            # print(f"Saving partial audio until {step}")
 
         step += 1
     writer.close()
-    # full_audio = np.concatenate(audio_chunks)
-    # file = outputPath + f"{title}.wav"
-    # sf.write(file, full_audio, 24000)
-    # print(f"Saved to {file}")
     saveAudio(outputPath, audio_chunks, title)
 
 
@@ -354,9 +343,6 @@ def multiGPU(chunks, description, outputPath, title, MODEL_PATH):
     ordered_audios = sharedData["results"]
     ordered_indices = sorted(ordered_audios.keys())
     full_audio = [ordered_audios[idx] for idx in ordered_indices]
-    # file = outputPath + f"{title}.wav"
-    # sf.write(file, full_audio, 24000)
-    # print(f"Saved to {file}")
     saveAudio(outputPath, full_audio, title)
 
 
@@ -381,7 +367,6 @@ def gpu_worker(gpu_id, q, model, snac_model, tokenizer, description, sharedData,
             generation_time = time.time() - start_time
             audio_duration = (len(audio) / 24000)
             # print(f"[{gpu_id}] Voice generation for part {idx} ({audio_duration:.2f} sec) in {generation_time:.2f} sec")
-            # audio = np.concatenate([audio, np.zeros(int(0.1 * 24000))])
 
         with lock:
             sharedData["results"][idx] = audio
@@ -410,9 +395,6 @@ def gpu_worker(gpu_id, q, model, snac_model, tokenizer, description, sharedData,
                         partial_audio = [partial_audios[idx] for idx in partial_indices]
 
                         delete_previous_outputs(outputPath, step)
-                        # file = outputPath + f"partial_{step}.wav"
-                        # sf.write(file, partial_audio, 24000)
-                        # print(f"[{gpu_id}] Saving partial audio until {step}")
                         saveAudio(outputPath, partial_audio, f"partial_{step}")
 
         q.task_done()

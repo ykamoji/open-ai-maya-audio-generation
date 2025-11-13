@@ -9,7 +9,7 @@ Emotions:
   ModelPath:
     Default: /Users/ykamoji/Documents/open-ai-maya-audio-generation/models/
     Kaggle: /kaggle/working/open-ai-maya-audio-generation/models/
-    Colab: /content/drive/MyDrive/AI/Models
+    Colab: /content/drive/MyDrive/AI/Models/
 Generator:
   PageLimit: 1 # number(s) or empty
   PageNo:
@@ -29,7 +29,7 @@ Generator:
     ModelPath:
       Default: /Users/ykamoji/Documents/open-ai-maya-audio-generation/models/
       Kaggle: /kaggle/working/open-ai-maya-audio-generation/models/
-      Colab: /content/drive/MyDrive/AI/Models
+      Colab: /content/drive/MyDrive/AI/Models/
     Characters:
       - Name: David
         Description: "Seductively character, Male voice in their 30s with a American accent. normal pitch, gravelly timbre, brisk pacing, casual tone at mid intensity"

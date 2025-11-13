@@ -2,6 +2,57 @@ import torch
 import re
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+ALLOWED_TAGS = [
+    "laugh","laugh_harder","sigh","chuckle","gasp","angry","excited","whisper",
+    "cry","scream","sing","snort","exhale","gulp","giggle","sarcastic","curious"
+]
+
+TAG_PENALTY_WEIGHTS = {
+    "sigh": 1.0,
+    "chuckle": 0.8,
+    "giggle": 0.7,
+    "gasp": 1.0,
+    "angry": 1.6,
+    "sarcastic": 1.8,
+    "cry": 1.3,
+    "scream": 2.0,
+    "sing": 2.0,
+    "snort": 1.4,
+    "laugh": 1.0,
+    "laugh_harder": 1.2,
+    "exhale": 1.0,
+    "gulp": 1.1,
+    "whisper": 1.0,
+    "excited": 1.1,
+    "curious": 1.0,
+}
+
+AUTO_CORRECT_MAP = {
+    "happy": "giggle",
+    "joy": "giggle",
+    "joyful": "giggle",
+    "sad": "cry",
+    "upset": "cry",
+    "frustrated": "sigh",
+    "annoyed": "sigh",
+    "mad": "angry",
+    "furious": "angry",
+    "angry_sigh": "angry",
+    "rage": "angry",
+    "surprised": "gasp",
+    "shocked": "gasp",
+    "wow": "gasp",
+    "soft": "whisper",
+    "quiet": "whisper",
+    "unsure": "curious",
+    "confused": "curious",
+    "thinking": "curious",
+    "singing": "sing",
+    "laughing": "laugh",
+    "lol": "laugh",
+    "haha": "laugh",
+}
+
 
 def getModelAndTokenizer(MODEL_PATH, quantize):
 
@@ -41,7 +92,7 @@ def clean_output(outputs, chunks):
     extracted_data = []
     for idx, output in enumerate(outputs):
         if "Answer:" in output:
-            clean_lines = output.split("Answer:", 1)[1].strip()
+            clean_lines = output.rsplit("Answer:", 1)[-1].strip()
             extracted_data.append(clean_lines)
         else:
             print(f"\nFix needed for {output} !\n")

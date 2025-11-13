@@ -53,7 +53,8 @@ def analysis():
 
                 if metric == "min":
                     extra = f"""({stats[param]["min_title"]})"""
-
+            elif metric == "max" or metric == "min":
+                continue
             print(f"\t\t{metric}: {stats[param][metric]:.2f} {extra}")
     print("\n\n")
 
