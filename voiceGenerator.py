@@ -71,7 +71,7 @@ class VoiceGenerator:
             print(f"Need to run spellcheck and grammars for {len(contents_to_process)} pages")
             spell_checked_paragraphs = sanitise(self.Args, contents_to_process)
             for page in spell_checked_paragraphs:
-                page['content'].insert(1, self.TITLE_CACHE[notebook_name][page["title"]][section_name][0])
+                page['content'].insert(1, self.TITLE_CACHE[notebook_name][section_name][page["title"]][0])
                 self.VOICE_CACHE[page["title"]] = page['content']
 
             if update_voice_cache: updateCache('voiceCache.json', self.VOICE_CACHE)
