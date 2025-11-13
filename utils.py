@@ -46,6 +46,31 @@ def get_yaml_loader():
     return loader
 
 
-def updateCache(file, CACHE):
+def content_stats(content):
+    count = len(content.replace(" ", "").replace("\n", ""))
+    word_count = len(content.split())
+    lines = len(content.split('.'))
+    paras = len(content.split("\n\n"))
+
+    return {
+        "characters": count,
+        "words": word_count,
+        "lines": lines,
+        "paragraphs": paras
+    }
+
+
+def createCache(file):
+    CACHE = {}
+    if os.path.isfile(file):
+        with open(file) as f:
+            CACHE = json.load(f)
+    else:
+        with open(file, 'w') as f:
+            json.dump(CACHE, f)
+    return CACHE
+
+
+def updateCache(file, data):
     with open(file, 'w') as f:
-        json.dump(CACHE, f, indent=4)
+        json.dump(data, f, indent=2, ensure_ascii=False)

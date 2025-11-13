@@ -2,7 +2,7 @@ import os
 import time
 from openai import OpenAI
 from dotenv import load_dotenv
-from Generator.utils import createChunks, merge_audio
+from Generator.utils import createChunks
 
 load_dotenv(override=True)
 
@@ -11,6 +11,7 @@ instruction = (
     "Read the following story in a warm, expressive tone, "
     "with natural pacing, emotional inflection, and pauses after sentences:\n\n"
 )
+
 
 def convert(Args, content, title):
 
@@ -42,8 +43,6 @@ def convert(Args, content, title):
         part_count += 1
         print(f"Part {part_count}/{len(chunks)} done")
         time.sleep(30)
-
-    merge_audio(audio_files, f"{title}.mp3")
 
 
 

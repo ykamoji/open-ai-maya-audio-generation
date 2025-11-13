@@ -2,7 +2,7 @@ msgraph-core
 python-dotenv
 openai==2.7.1
 pydub==0.25.1
-transformers==4.57.1
+transformers==4.46.2
 snac
 soundfile
 numpy

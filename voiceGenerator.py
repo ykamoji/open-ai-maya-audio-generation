@@ -1,11 +1,15 @@
 import os
+import glob
 import json
 import yaml
 import time
 import argparse
-from utils import CustomObject, get_yaml_loader
-from GraphAPI.graphs import GraphAPI
-from Generator.utils import content_stats
+import soundfile as sf
+import numpy as np
+from utils import createCache
+from Emotions.sanitise import sanitise
+from Emotions.emotions import addEmotions
+from utils import CustomObject, get_yaml_loader, updateCache
 from Generator.OpenAI import convert as openAIConvert
 from Generator.Maya import convert as mayaConvert
 
@@ -16,6 +20,7 @@ class VoiceGenerator:
 
         parser = argparse.ArgumentParser(description="Initidate data")
         parser.add_argument("--config", type=str, default="Default", help="Configuration file")
+        parser.add_argument("--step", type=str, default="0", help="Step definition")
         args = parser.parse_args()
 
         with open('default.yaml', 'r') as file:
@@ -25,59 +30,102 @@ class VoiceGenerator:
         self.Args = json.loads(x, object_hook=lambda d: CustomObject(**d))
 
         self.Args.Platform = args.config
+        self.Args.Step = int(args.step)
 
-        with open('cache.json') as f:
-            self.CACHE = json.load(f)
+        with open('contentCache.json') as f:
+            self.CONTENT_CACHE = json.load(f)
 
-        if os.path.isfile('contentCache.json'):
-            with open('contentCache.json') as f:
-                self.CONTENT_CACHE = json.load(f)
-        else:
-            self.CONTENT_CACHE = {}
-            with open('contentCache.json', 'w') as f:
-                json.dump(self.CONTENT_CACHE, f)
+        self.TITLE_CACHE = createCache('titleCache.json')
+        self.VOICE_CACHE = createCache('voiceCache.json')
+        self.EMOTION_CACHE = createCache('emotionCache.json')
 
-    def updateCache(self):
-        with open('contentCache.json', 'w') as f:
-            json.dump(self.CONTENT_CACHE, f, indent=2, ensure_ascii=False)
+    def load_content(self):
+        data = []
+        for pages in self.CONTENT_CACHE:
+            data.append({
+                "title": pages,
+                "content": self.CONTENT_CACHE[pages]['content'],
+            })
+        return data
+
+    def add_title(self, notebook_name, section_name, title):
+        return self.TITLE_CACHE.get(notebook_name, {}).get(section_name, {}).get(title, [None])[0]
 
     def generation(self):
-
-        update_cache = False
 
         notebook_name = self.Args.Graph.NotebookName
         section_name = self.Args.Graph.SectionName
 
-        print(f"Running voice generation for {notebook_name} {section_name}")
+        pages = self.load_content()
 
-        pages = self.CACHE["Pages"][section_name]
+        limit = len(pages)
+        if self.Args.Generator.PageLimit:
+            limit = self.Args.Generator.PageLimit
 
-        if self.Args.Generator.Pages:
-            pages = pages[:self.Args.Generator.Pages]
+        if self.Args.Step == 1:
+            print(f"Processing spellcheck and grammars for {notebook_name} {section_name}")
+            contents_to_process = []
+            update_voice_cache = False
+            for pageNo, page in enumerate(pages[:limit]):
+                if not self.VOICE_CACHE or page["title"] not in self.VOICE_CACHE:
+                    contents_to_process.append(page)
+                    update_voice_cache = True
 
-        graph = GraphAPI(self.Args.Graph)
+            print(f"Need to run spellcheck and grammars for {len(contents_to_process)} pages")
+            spell_checked_paragraphs = sanitise(self.Args, contents_to_process)
+            for page in spell_checked_paragraphs:
+                self.VOICE_CACHE[page["title"]] = page['content']
 
-        for pageNo, page in enumerate(pages):
-            if not self.Args.Graph.RefreshPages and self.CONTENT_CACHE and page["title"] in self.CONTENT_CACHE:
-                content = self.CONTENT_CACHE[page["title"]]
-            else:
-                content = graph.getContent(page["id"])
-                self.CONTENT_CACHE[page["title"]] = content
-                update_cache = True
+            if update_voice_cache: updateCache('voiceCache.json', self.VOICE_CACHE)
 
-            if update_cache: self.updateCache()
+            print(f"Spell check and grammar completed !")
 
-            # print(content)
+        if self.Args.Step == 2:
+            print(f"Creating Emotions for {notebook_name} {section_name}")
+            contents_to_process = []
+            update_emotion_cache = False
+            for pageNo, page in enumerate(pages[:limit]):
+                if not self.EMOTION_CACHE or page["title"] not in self.EMOTION_CACHE:
+                    contents_to_process.append(
+                        {
+                            "title": page["title"],
+                            "content": self.VOICE_CACHE[page["title"]]
+                        })
+                    update_emotion_cache = True
 
-            print(f"Processing the content {page['title']} : {content_stats(content)}")
+            emotion_paragraphs = addEmotions(self.Args, contents_to_process)
+            for page in emotion_paragraphs:
+                suggested_title = self.add_title(notebook_name, section_name, page["title"])
+                page['content'].insert(0, suggested_title)
+                self.EMOTION_CACHE[page["title"]] = page['content']
 
-            if self.Args.Generator.OpenAI.Action:
-                openAIConvert(self.Args, content, page["title"])
-            elif self.Args.Generator.Maya.Action:
-                mayaConvert(self.Args, content, page["title"])
+            if update_emotion_cache: updateCache('emotionCache.json', self.EMOTION_CACHE)
 
-            if pageNo != len(pages) - 1:
-                time.sleep(30)
+        if self.Args.Step == 3:
+            end = len(self.EMOTION_CACHE[:limit]) - 1
+            outputPath = self.Args.Generator.AudioOutputPath.__dict__[self.Args.Platform]
+            for pageNo, page in enumerate(self.EMOTION_CACHE[:limit]):
+                print(f"Generating voice for {notebook_name} {section_name} {page['title']}")
+                if self.Args.Generator.OpenAI.Action:
+                    openAIConvert(self.Args, page['content'], page["title"])
+                elif self.Args.Generator.Maya.Action:
+                    mayaConvert(self.Args, page['content'], page["title"], outputPath)
+                if pageNo != end:
+                    time.sleep(60)
+
+            audios = glob.glob(outputPath + "audios/*.npy")
+            audios.sort(key=os.path.getmtime)
+            audiobook = []
+            for audio in audios:
+                audiobook.append(np.load(audio))
+                audiobook.append(audio)
+                np.zeros(int(0.3 * 24000))
+            audiobook = np.concatenate(audiobook)
+            final_audio_path = outputPath + 'audios/audiobook.wav'
+            sf.write(final_audio_path, audiobook, 24000)
+            print(f"Saved audiobook in {final_audio_path} !")
+
+
 
 
 if __name__ == "__main__":

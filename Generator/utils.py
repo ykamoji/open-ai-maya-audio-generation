@@ -1,12 +1,4 @@
-from pydub import AudioSegment
-
-
-def content_stats(content):
-    count = len(content.replace(" ", "").replace("\n", ""))
-    word_count = len(content.split())
-    lines = len(content.split('.'))
-    paras = len(content.split("\n\n"))
-    return f"{count} characters, {word_count} words, {lines} lines, {paras} paragraphs"
+import re
 
 
 def createChunks(content, limit=None):
@@ -17,11 +9,19 @@ def createChunks(content, limit=None):
         chunks = paraChunks(limit, paragraphs)
     else:
         for para in paragraphs:
-            lines = [line.strip().replace('.', '') + '.' for line in para.split(". ") if line.strip()]
+            lines = convert_to_sentences(para)
             chunks.extend(lines)
             chunks.append('')
 
     return chunks
+
+
+def convert_to_sentences(content):
+    lines = []
+    pattern = r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<![A-Z]\.)(?<=\.)\s'
+    for se in re.split(pattern, content):
+        lines.append(re.sub(r'(^|\s)\d+\.\s*', r'\1', se))
+    return lines
 
 
 def paraChunks(limit, paragraphs):
@@ -54,20 +54,3 @@ def paraChunks(limit, paragraphs):
             raise Exception(msg)
 
     return chunks
-
-
-def merge_audio(files, output_file, format="mp3"):
-    combined = AudioSegment.empty()
-    for file in files:
-        print(f"Merging {file}...")
-        segment = None
-        if format == "mp3":
-            segment = AudioSegment.from_mp3(file)
-        elif format == "wav":
-            segment = AudioSegment.from_wav(file)
-
-        combined += segment
-
-    combined.export(output_file, format=format)
-
-    print(f"Merged audio saved as {output_file}")

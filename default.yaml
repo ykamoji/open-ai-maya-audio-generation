@@ -3,12 +3,19 @@ Graph:
   SectionName: "Book 5"
   RefreshPages: False
   EnvPath:
+  PageLimit:  2 # number(s) or empty
+Emotions:
+  Quantize: False
+  ModelPath:
+    Default: /Users/ykamoji/Documents/open-ai-maya-audio-generation/models/
+    Kaggle: /kaggle/working/models/
+    Colab: /content/open-ai-maya-audio-generation/Models/
 Generator:
-  Pages: 1 # number(s) or empty
+  PageLimit:  2 # number(s) or empty
   PageNo:
   AudioOutputPath:
     Default: output/
-    Kaggle: /kaggle/working/open-ai-audio-transcription/output/
+    Kaggle: /kaggle/working/output/
     Colab: /content/drive/MyDrive/AI/Outputs/
   GPU:
     Default: 0
@@ -20,9 +27,9 @@ Generator:
   Maya:
     Action: True
     ModelPath:
-      Default: /Users/ykamoji/Documents/open-ai-audio-transcription/models/
-      Kaggle: /kaggle/working/open-ai-audio-transcription/models/
-      Colab: /content/drive/MyDrive/AI/Models
+      Default: /Users/ykamoji/Documents/open-ai-maya-audio-generation/models/
+      Kaggle: /kaggle/input/
+      Colab: /content/drive/MyDrive/AI/Models/
     Characters:
       - Name: David
         Description: "Seductively character, Male voice in their 30s with a American accent. normal pitch, gravelly timbre, brisk pacing, casual tone at mid intensity"
