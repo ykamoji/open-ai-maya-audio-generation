@@ -4,11 +4,17 @@ import pandas as pd
 import difflib
 import re
 import random
+import spacy
 from tqdm import tqdm
 from collections import Counter, deque
-from Emotions.utils import getModelAndTokenizer, clean_output, ALLOWED_TAGS, AUTO_CORRECT_MAP, TAG_PENALTY_WEIGHTS
+from Emotions.utils import getModelAndTokenizer, clean_output, ALLOWED_TAGS, AUTO_CORRECT_MAP, TAG_PENALTY_WEIGHTS, \
+    TAG_SIMILARITY_WEIGHTS
+
+nlp = spacy.load("en_core_web_md")
 
 TAG_STATS_PATH = 'emotion_tag_stats.csv'
+UNKNOWN_TAG_LOG_PATH = "unknown_tags_log.csv"
+unknown_tag_log = Counter()
 
 prompt = """
 You are an expressive text enhancer that adds emotional cues to writing.
@@ -46,8 +52,37 @@ HISTORY_WINDOW = 5  # Last 5 paragraphs matter
 recent_tag_history = deque(maxlen=HISTORY_WINDOW)
 
 
+def spacy_similarity(a, b):
+    return nlp(a).similarity(nlp(b))
+
+
+def weighted_fuzzy_match(raw, allowed):
+    raw = raw.lower().strip()
+    best_score = -1
+    best_tag = None
+
+    for tag in allowed:
+        fuzzy = difflib.SequenceMatcher(None, raw, tag).ratio()
+        semantic = spacy_similarity(raw, tag)
+        bonus = 0.0
+        for k, related in TAG_SIMILARITY_WEIGHTS.items():
+            if k in raw:
+                if tag in related:
+                    bonus = 0.25
+        score = (0.2 * fuzzy) + (0.7 * semantic) + bonus
+        if score > best_score:
+            best_score = score
+            best_tag = tag
+
+    return best_tag or "curious"
+
+
 def autocorrect_tag(tag):
+    global unknown_tag_log
     t = tag.lower().strip()
+
+    if t not in ALLOWED_TAGS and t not in AUTO_CORRECT_MAP:
+        unknown_tag_log[t] += 1
 
     if t in AUTO_CORRECT_MAP:
         return f"<{AUTO_CORRECT_MAP[t]}>"
@@ -55,11 +90,8 @@ def autocorrect_tag(tag):
     if t in ALLOWED_TAGS:
         return f"<{t}>"
 
-    close = difflib.get_close_matches(t, ALLOWED_TAGS, n=1, cutoff=0.65)
-    if close:
-        return f"<{close[0]}>"
-
-    return ""
+    best = weighted_fuzzy_match(t, ALLOWED_TAGS)
+    return f"<{best}>"
 
 
 def remove_and_autocorrect_tags(text):
@@ -135,6 +167,29 @@ def save_global_stats():
     df.to_csv(TAG_STATS_PATH, index=False)
 
 
+def save_unknown_tag_log():
+    if not unknown_tag_log:
+        return
+
+    df = pd.DataFrame(
+        [(tag, count) for tag, count in unknown_tag_log.items()],
+        columns=["unknown_tag", "count"]
+    )
+
+    if os.path.exists(UNKNOWN_TAG_LOG_PATH):
+        try:
+            existing = pd.read_csv(UNKNOWN_TAG_LOG_PATH)
+            merged = (
+                pd.concat([existing, df])
+                .groupby("unknown_tag", as_index=False)
+                .sum()
+            )
+        except Exception:
+            merged = df
+        merged.to_csv(UNKNOWN_TAG_LOG_PATH, index=False)
+    else:
+        df.to_csv(UNKNOWN_TAG_LOG_PATH, index=False)
+
 def generate_emotion_lines(model, tokenizer, paragraph):
     global global_tag_counts
     tagged = []
@@ -187,5 +242,6 @@ def addEmotions(Args, pages):
             torch.cuda.empty_cache()
         response.append({"title": page['title'], "content": outputs})
         save_global_stats()
+        save_unknown_tag_log()
 
     return response

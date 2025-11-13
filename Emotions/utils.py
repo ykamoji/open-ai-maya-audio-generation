@@ -27,9 +27,34 @@ TAG_PENALTY_WEIGHTS = {
     "curious": 1.0,
 }
 
+TAG_SIMILARITY_WEIGHTS = {
+    "laugh":         ["laugh_harder", "giggle", "chuckle"],
+    "laugh_harder":  ["laugh", "giggle"],
+    "giggle":        ["laugh", "laugh_harder", "chuckle"],
+    "chuckle":       ["laugh", "giggle"],
+
+    "cry":           ["sigh", "exhale"],
+    "sigh":          ["cry", "exhale"],
+    "exhale":        ["sigh", "cry"],
+
+    "angry":         ["sarcastic", "scream", "snort"],
+    "sarcastic":     ["angry", "snort"],
+    "snort":         ["sarcastic", "laugh"],
+
+    "gasp":          ["excited", "cry"],
+    "excited":       ["gasp", "laugh"],
+
+    "whisper":       ["curious"],
+    "curious":       ["whisper", "excited"],
+
+    "gulp":          ["exhale"],
+    "scream":        ["angry"],
+    "sing":          ["excited", "laugh"],
+}
+
+
 AUTO_CORRECT_MAP = {
     "happy": "giggle",
-    "excite:": "excited",
     "joy": "giggle",
     "joyful": "giggle",
     "sad": "cry",
