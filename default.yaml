@@ -28,7 +28,7 @@ Generator:
     Action: True
     ModelPath:
       Default: /Users/ykamoji/Documents/open-ai-maya-audio-generation/models/
-      Kaggle: /kaggle/input/maya1-voice-generation/transformers/ft/1/  # For Kaggle, use model path directly
+      Kaggle: # For Kaggle, use internal cahce
       Colab: /content/drive/MyDrive/AI/Models/
     Characters:
       - Name: David

@@ -105,29 +105,17 @@ def getDescription(MayaArgs, title):
 
 
 def getModels(MODEL_PATH):
-    print("Loading model...")
-    if platform == 'Kaggle':
-        model = AutoModelForCausalLM.from_pretrained(
-            MODEL_PATH + "models--maya-research--maya1/models--maya-research--maya1/",
-            torch_dtype=torch.float16,
-            # dtype="float16",
-            trust_remote_code=True
-        )
-        snac_model = SNAC.from_pretrained(MODEL_PATH + "models--hubertsiuzdak--snac_24khz/models--hubertsiuzdak--snac_24khz/")
-    else:
-        model = AutoModelForCausalLM.from_pretrained(
-            "maya-research/maya1",
-            cache_dir=MODEL_PATH,
-            torch_dtype=torch.float16,
-            # dtype="float16",
-            trust_remote_code=True
-        )
-        snac_model = SNAC.from_pretrained("hubertsiuzdak/snac_24khz", cache_dir=MODEL_PATH)
-
-    snac_model.eval()
+    model = AutoModelForCausalLM.from_pretrained(
+        "maya-research/maya1",
+        cache_dir=MODEL_PATH,
+        torch_dtype=torch.float16,
+        # dtype="float16",
+        trust_remote_code=True
+    )
     model.eval()
     tokenizer = getTokenizer(MODEL_PATH)
-
+    snac_model = SNAC.from_pretrained("hubertsiuzdak/snac_24khz",  cache_dir=MODEL_PATH).eval()
+    print("Models loaded")
     return model, snac_model, tokenizer
 
 
@@ -155,9 +143,6 @@ def delete_previous_outputs(outputPath, step):
 
 def convert(Args, content, title, outputPath):
     MayaArgs = Args.Generator.Maya
-
-    global platform
-    platform = Args.Platform
 
     MODEL_PATH = MayaArgs.ModelPath.__dict__[Args.Platform]
 
