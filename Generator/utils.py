@@ -1,3 +1,6 @@
+import re
+
+
 def createChunks(content, limit=None):
 
     chunks = []
@@ -6,11 +9,19 @@ def createChunks(content, limit=None):
         chunks = paraChunks(limit, paragraphs)
     else:
         for para in paragraphs:
-            lines = [line.strip().replace('.', '') + '.' for line in para.split(". ") if line.strip()]
+            lines = convert_to_sentences(para)
             chunks.extend(lines)
             chunks.append('')
 
     return chunks
+
+
+def convert_to_sentences(content):
+    lines = []
+    pattern = r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<![A-Z]\.)(?<=\.)\s'
+    for se in re.split(pattern, content):
+        lines.append(re.sub(r'(^|\s)\d+\.\s*', r'\1', se))
+    return lines
 
 
 def paraChunks(limit, paragraphs):

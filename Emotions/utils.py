@@ -127,12 +127,3 @@ def clean_output(outputs, chunks):
 
     return extracted_data
 
-
-def convert_to_sentences(content):
-    lines = []
-    for para in content:
-        pattern = r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<![A-Z]\.)(?<=\.)\s'
-        for se in re.split(pattern, para):
-            lines.append(re.sub(r'(^|\s)\d+\.\s*', r'\1', se))
-    return lines
-
