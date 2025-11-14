@@ -220,7 +220,18 @@ def generate_emotion_lines(model, tokenizer, paragraph):
         {"role": "user", "content": make_user_prompt(paragraph)}
     ]
 
-    encoded = tokenizer.apply_chat_template(messages, padding=True, return_tensors="pt")
+    prompt_text = tokenizer.apply_chat_template(
+        messages,
+        add_generation_prompt=True,
+        tokenize=False,
+    )
+
+    encoded = tokenizer(
+        prompt_text,
+        return_tensors="pt",
+        padding=True,
+        truncation=True,
+    )
 
     input_ids = encoded["input_ids"].to(model.device)
     attention_mask = encoded["attention_mask"].to(model.device)

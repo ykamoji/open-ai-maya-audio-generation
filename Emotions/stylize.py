@@ -31,11 +31,17 @@ def generate_paragrpah(model, tokenizer, paragraph):
         {"role": "user", "content": paragraph}
     ]
 
-    encoded = tokenizer.apply_chat_template(
+    prompt_text = tokenizer.apply_chat_template(
         messages,
         add_generation_prompt=True,
+        tokenize=False,
+    )
+
+    encoded = tokenizer(
+        prompt_text,
         return_tensors="pt",
-        padding=True
+        padding=True,
+        truncation=True,
     )
 
     input_ids = encoded["input_ids"].to(model.device)
