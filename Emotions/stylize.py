@@ -73,7 +73,7 @@ def stylize(Args, pages):
         outputs = []
         for paragraph in tqdm(chunks, desc="Processing", ncols=100):
             stylized_paragraph = generate_paragrpah(model, tokenizer, paragraph)
-            outputs.extend(stylized_paragraph)
+            outputs.append(stylized_paragraph)
         torch.cuda.empty_cache()
         response.append({"title": page['title'], "content": outputs})
 
