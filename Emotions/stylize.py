@@ -23,7 +23,7 @@ Very important Guidelines:
 Return only the edited paragraph, clean and ready for audiobook production.
 """.strip()
 
-BATCH_SIZE = 4
+BATCH_SIZE = 8
 
 
 def stylize(Args, pages, VOICE_CACHE):
@@ -40,52 +40,60 @@ def stylize(Args, pages, VOICE_CACHE):
     for page in pages:
         print(f"\nRunning stylization on page {page['title']}.")
         content = page['content']
+        try:
+            chunks = createChunks(content, limit=5000)
+            prompts = generate_prompts(chunks, tokenizer)
 
-        chunks = createChunks(content, limit=5000)
-        prompts = generate_prompts(chunks, tokenizer)
+            outputs = []
+            for i in tqdm(range(0, len(prompts), BATCH_SIZE), desc="Processing", ncols=100):
+                outputs.extend(paragraph_stylization(i, model, prompts, terminators, tokenizer))
 
-        outputs = []
-        for i in tqdm(range(0, len(prompts), BATCH_SIZE), desc="Processing", ncols=100):
-            outputs.extend(paragraph_stlyization(i, model, prompts, terminators, tokenizer))
+            # Save the page generated
+            if outputs:
+                VOICE_CACHE[page["title"]] = outputs
+                updateCache('voiceCache.json', VOICE_CACHE)
+                processed += 1
 
-        torch.cuda.empty_cache()
-        #Save the page generated
-        if outputs:
-            VOICE_CACHE[page["title"]] = outputs
-            updateCache('voiceCache.json', VOICE_CACHE)
-            processed += 1
+        except Exception as e:
+            print(f"Error for page {page['title']}: {e}\n. Skipping...")
+        finally:
+            torch.cuda.empty_cache()
 
     return processed
 
 
-def paragraph_stlyization(i, model, prompts, terminators, tokenizer):
+def paragraph_stylization(i, model, prompts, terminators, tokenizer):
     outputs = []
     batch = prompts[i: i + BATCH_SIZE]
+    try:
+        encoded = tokenizer(
+            batch,
+            return_tensors="pt",
+            padding=True,
+            truncation=False,
+        ).to('cuda')
 
-    encoded = tokenizer(
-        batch,
-        return_tensors="pt",
-        padding=True,
-        truncation=True,
-    ).to('cuda')
+        with torch.inference_mode():
+            generated = model.generate(
+                input_ids=encoded["input_ids"],
+                attention_mask=encoded["attention_mask"],
+                max_new_tokens=512,
+                do_sample=False,
+                eos_token_id=terminators,
+                pad_token_id=tokenizer.eos_token_id,
+                return_dict_in_generate=True,
+            )
 
-    with torch.inference_mode():
-        generated = model.generate(
-            input_ids=encoded["input_ids"],
-            attention_mask=encoded["attention_mask"],
-            max_new_tokens=512,
-            do_sample=False,
-            eos_token_id=terminators,
-            pad_token_id=tokenizer.eos_token_id
-        )
+        prompt_len = encoded["input_ids"].shape[1]
+        sequences = generated.sequences
+        generated_content = sequences[:, prompt_len:]
 
-    input_lengths = encoded["attention_mask"].sum(dim=1)
+        for b in range(len(batch)):
+            text = tokenizer.decode(generated_content[b], skip_special_tokens=True).strip()
+            outputs.append(text)
 
-    for b in range(len(batch)):
-        start = input_lengths[b]
-        new_tokens = generated[b][start:]
-        text = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
-        outputs.append(text)
+    finally:
+        del encoded, generated, sequences, generated_content
 
     return outputs
 
