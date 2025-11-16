@@ -51,7 +51,7 @@ def generate_paragrpah(model, tokenizer, paragraph):
         tokenizer.convert_tokens_to_ids("<|eot_id|>")
     ]
 
-    with torch.no_grad():
+    with torch.inference_mode():
         output_ids = model.generate(
             input_ids=input_ids,
             attention_mask=attention_mask,
