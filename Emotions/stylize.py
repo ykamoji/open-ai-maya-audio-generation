@@ -3,6 +3,12 @@ from tqdm import tqdm
 from Generator.utils import createChunks
 from Emotions.utils import getModelAndTokenizer
 from utils import updateCache
+import warnings
+from transformers.utils import logging
+
+warnings.filterwarnings("ignore")
+logging.set_verbosity_error()
+
 
 SYSTEM_PROMPT = """
 You are a professional editor preparing manuscripts for audiobook narration. Your task is to refine the paragraph to improve clarity, rhythm, 
@@ -40,8 +46,6 @@ def stylize(Args, pages, VOICE_CACHE):
         try:
             chunks = createChunks(content, limit=5000)
             prompts = generate_prompts(chunks, tokenizer)
-            # for i in tqdm(range(0, len(prompts), BATCH_SIZE), desc="Processing", ncols=100):
-            #     outputs.extend(paragraph_stylization(i, model, prompts, terminators, tokenizer))
             outputs = paragraph_stylization(model, prompts, terminators, tokenizer)
 
             # Save the page generated

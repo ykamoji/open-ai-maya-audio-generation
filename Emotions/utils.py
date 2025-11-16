@@ -1,5 +1,4 @@
 import torch
-import re
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 ALLOWED_TAGS = [
