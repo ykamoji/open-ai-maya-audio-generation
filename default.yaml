@@ -11,7 +11,7 @@ Emotions:
     Kaggle: # For Kaggle, use internal cache
     Colab: /content/open-ai-maya-audio-generation/Models/
 Generator:
-  PageLimit:  # number(s) or empty
+  PageLimit:  1 # number(s) or empty
   PageNo:
   AudioOutputPath:
     Default: output/

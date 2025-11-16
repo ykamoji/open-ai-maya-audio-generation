@@ -120,23 +120,21 @@ class VoiceGenerator:
         if self.Args.Step == 2:
             print(f"Creating Emotions for {notebook_name} {section_name}")
             contents_to_process = []
-            update_emotion_cache = False
             for pageNo, page in enumerate(pages[:limit]):
                 if not self.EMOTION_CACHE or page["title"] not in self.EMOTION_CACHE:
                     contents_to_process.append(
                         {
                             "title": page["title"],
+                            "suggested_title" : self.add_title(notebook_name, section_name, page["title"]),
                             "content": self.VOICE_CACHE[page["title"]]
                         })
-                    update_emotion_cache = True
-
-            emotion_paragraphs = addEmotions(self.Args, contents_to_process)
-            for page in emotion_paragraphs:
-                suggested_title = self.add_title(notebook_name, section_name, page["title"])
-                page['content'].insert(0, suggested_title)
-                self.EMOTION_CACHE[page["title"]] = page['content']
-
-            if update_emotion_cache: updateCache('emotionCache.json', self.EMOTION_CACHE)
+            if contents_to_process:
+                print(f"Need to add emotions to {len(contents_to_process)} pages")
+                emotion_paragraphs = addEmotions(self.Args, contents_to_process, self.EMOTION_CACHE)
+                if emotion_paragraphs == len(contents_to_process):
+                    print(f"Emotion adding completed!")
+                else:
+                    print(f"Something went wrong! Check the logs.")
 
         if self.Args.Step == 3:
             end = len(pages[:limit]) - 1

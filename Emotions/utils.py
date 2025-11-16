@@ -1,74 +1,15 @@
 import torch
-import os
+import re
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
-os.environ["ABSL_LOGGING_THRESHOLD"] = "fatal"
-os.environ["XLA_FLAGS"] = "--xla_gpu_cuda_data_dir="
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-
-ALLOWED_TAGS = [
-    "laugh","laugh_harder","sigh","chuckle","gasp","angry","excited","whisper",
-    "cry","scream","sing","snort","exhale","gulp","giggle","sarcastic","curious"
-]
-
-TAG_PENALTY_WEIGHTS = {
-    "sigh": 1.0,
-    "chuckle": 0.8,
-    "giggle": 0.7,
-    "gasp": 1.0,
-    "angry": 1.6,
-    "sarcastic": 1.8,
-    "cry": 1.3,
-    "scream": 2.0,
-    "sing": 2.0,
-    "snort": 1.4,
-    "laugh": 1.0,
-    "laugh_harder": 1.2,
-    "exhale": 1.0,
-    "gulp": 1.1,
-    "whisper": 1.0,
-    "excited": 1.1,
-    "curious": 1.0,
-}
-
-
-AUTO_CORRECT_MAP = {
-    "happy": "giggle",
-    "joy": "giggle",
-    "joyful": "giggle",
-    "sad": "cry",
-    "upset": "cry",
-    "frustrated": "sigh",
-    "annoyed": "sigh",
-    "mad": "angry",
-    "furious": "angry",
-    "angry_sigh": "angry",
-    "rage": "angry",
-    "surprised": "gasp",
-    "surprise": "gasp",
-    "shocked": "gasp",
-    "wow": "gasp",
-    "soft": "whisper",
-    "quiet": "whisper",
-    "unsure": "curious",
-    "confused": "curious",
-    "thinking": "curious",
-    "singing": "sing",
-    "laughing": "laugh",
-    "lol": "laugh",
-    "haha": "laugh",
-    "concerned": "curious",
-    "disappointed": "sigh",
-    "sadness": "cry",
-    "anxious": "gulp",
-    "nervous": "gulp",
-    "tense": "gulp",
-    "relieved": "exhale",
-    "suspicious": "curious",
-    "thrilled": "excited"
-}
+sentence_regex = re.compile(
+    r'''(?x)
+    (?<!\w\.\w.)          
+    (?<![A-Z][a-z]\.)     
+    (?<=\.|\?|!)          
+    \s+                   
+    '''
+)
 
 
 def getModelAndTokenizer(MODEL_PATH, quantize, platform):
@@ -96,7 +37,7 @@ def getModelAndTokenizer(MODEL_PATH, quantize, platform):
         torch_dtype=DTYPE,
         load_in_4bit=False,
         load_in_8bit=False
-    )
+    ).eval()
 
     model.generation_config.return_legacy_cache = True
 
@@ -112,3 +53,7 @@ def getModelAndTokenizer(MODEL_PATH, quantize, platform):
 
     return model, tokenizer
 
+
+def split_sentences(text: str):
+    parts = sentence_regex.split(text.strip())
+    return [p.strip() for p in parts if p.strip()]
