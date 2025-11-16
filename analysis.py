@@ -1,5 +1,6 @@
 import json
-
+import re
+from collections import defaultdict
 
 def analysis():
 
@@ -50,7 +51,6 @@ def analysis():
             if len(pages) > 1:
                 if metric == "max":
                     extra = f"""({stats[param]["max_title"]})"""
-
                 if metric == "min":
                     extra = f"""({stats[param]["min_title"]})"""
             elif metric == "max" or metric == "min":
@@ -59,3 +59,29 @@ def analysis():
     print("\n\n")
 
 
+def post_processing_helper():
+    with open('voiceCache.json') as f:
+        content = json.load(f)
+
+    count = 0
+    total = 0
+    to_remove = 0
+    for key in content:
+        total += len(content[key])
+        for paras in content[key]:
+            if "\n\n" in paras:
+                count += 1
+                for para in paras.split("\n\n"):
+                    if (para.startswith("I made") and ("adjustments" in para or "changes" in para)) or "paragraph" in para.lower():
+                        to_remove += 1
+                        print(para)
+
+    print(f"\n\n{(count / total)*100:.2f} % of original paragraphs were split further into smaller paragraphs")
+    print(f"\n\n{to_remove} paragraphs need to be removed from original paragraphs")
+
+
+
+
+if __name__ == "__main__":
+    # analysis()
+    post_processing_helper()

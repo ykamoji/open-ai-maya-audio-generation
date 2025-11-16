@@ -6,7 +6,8 @@ import time
 import argparse
 import soundfile as sf
 import numpy as np
-from utils import createCache
+from tqdm import tqdm
+from utils import create_or_load_Cache
 from Emotions.stylize import stylize
 from Emotions.emotions import addEmotions
 from utils import CustomObject, get_yaml_loader, updateCache
@@ -30,14 +31,14 @@ class VoiceGenerator:
         self.Args = json.loads(x, object_hook=lambda d: CustomObject(**d))
 
         self.Args.Platform = args.config
-        self.Args.Step = int(args.step)
+        self.Args.Step = float(args.step)
 
         with open('contentCache.json') as f:
             self.CONTENT_CACHE = json.load(f)
 
-        self.TITLE_CACHE = createCache('titleCache.json')
-        self.VOICE_CACHE = createCache('voiceCache.json')
-        self.EMOTION_CACHE = createCache('emotionCache.json')
+        self.TITLE_CACHE = create_or_load_Cache('titleCache.json')
+        self.VOICE_CACHE = create_or_load_Cache('voiceCache.json')
+        self.EMOTION_CACHE = create_or_load_Cache('emotionCache.json')
 
     def load_content(self):
         data = []
@@ -76,6 +77,38 @@ class VoiceGenerator:
                     print(f"Spell check and grammar completed!")
                 else:
                     print(f"Something went wrong! Check the logs.")
+
+        if self.Args.Step == 1.5:
+            print(f"Starting post processing for voice texts.")
+            for key in tqdm(self.VOICE_CACHE, desc=f"Processing content"):
+                split_paragraph = False
+
+                for idx, _ in enumerate(self.VOICE_CACHE[key]):
+                    # Remove the prefix at the beginning.
+                    for prefix in ["Here's the edited paragraph:\n\n", "Here's the revised paragraph:\n\n"]:
+                        self.VOICE_CACHE[key][idx] = self.VOICE_CACHE[key][idx].removeprefix(prefix)
+
+                    # Remove the extra details at the end.
+                    if "\n\n" in self.VOICE_CACHE[key][idx]:
+                        split_paragraph = True
+                        modified_paragraphs = self.VOICE_CACHE[key][idx]
+                        for para_idx, para in enumerate(self.VOICE_CACHE[key][idx].split("\n\n")):
+                            if para.startswith("I made") and ("adjustments" in para or "changes" in para):
+                                modified_paragraphs = "\n\n".join(modified_paragraphs.split('\n\n')[:para_idx])
+                                break
+
+                        self.VOICE_CACHE[key][idx] = modified_paragraphs
+
+                # Keep the list paragraph seperated,
+                if split_paragraph:
+                    modified_paragraphs = []
+                    for paras in self.VOICE_CACHE[key]:
+                        parts = [part for part in paras.split("\n\n") if part.strip()]
+                        modified_paragraphs.extend(parts)
+                    self.VOICE_CACHE[key] = modified_paragraphs
+
+            updateCache('voiceCache.json', self.VOICE_CACHE)
+            print(f"Post processing completed voice texts.")
 
         if self.Args.Step == 2:
             print(f"Creating Emotions for {notebook_name} {section_name}")
