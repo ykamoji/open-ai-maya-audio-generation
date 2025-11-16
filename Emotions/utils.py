@@ -92,6 +92,8 @@ def getModelAndTokenizer(MODEL_PATH, quantize, platform):
         load_in_8bit=False
     )
 
+    model.generation_config.return_legacy_cache = True
+
     tokenizer = AutoTokenizer.from_pretrained(
         "meta-llama/Llama-3.1-8B-Instruct" if platform != 'Kaggle' else "/kaggle/input/llama-3-1-8b-instruct/transformers/1/1/Tokenizer",
         padding_side="left",

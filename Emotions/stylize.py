@@ -96,7 +96,7 @@ def paragraph_stylization(model, prompts, terminators, tokenizer):
 
 def generate_prompts(chunks, tokenizer):
     prompts = []
-    for paragraph in tqdm(chunks, desc="Generating prompts"):
+    for paragraph in chunks:
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": paragraph}
