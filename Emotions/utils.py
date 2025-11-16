@@ -1,5 +1,12 @@
 import torch
+import os
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
+os.environ["ABSL_LOGGING_THRESHOLD"] = "fatal"
+os.environ["XLA_FLAGS"] = "--xla_gpu_cuda_data_dir="
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 
 ALLOWED_TAGS = [
     "laugh","laugh_harder","sigh","chuckle","gasp","angry","excited","whisper",
