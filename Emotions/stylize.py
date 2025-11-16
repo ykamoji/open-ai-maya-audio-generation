@@ -23,8 +23,6 @@ Very important Guidelines:
 Return only the edited paragraph, clean and ready for audiobook production.
 """.strip()
 
-BATCH_SIZE = 8
-
 
 def stylize(Args, pages, VOICE_CACHE):
     MODEL_PATH = Args.Emotions.ModelPath.__dict__[Args.Platform]
@@ -37,16 +35,14 @@ def stylize(Args, pages, VOICE_CACHE):
     ]
 
     processed = 0
-    for page in pages:
-        print(f"\nRunning stylization on page {page['title']}.")
+    for page in tqdm(pages, desc="Pages", ncols=100):
         content = page['content']
         try:
             chunks = createChunks(content, limit=5000)
             prompts = generate_prompts(chunks, tokenizer)
-
-            outputs = []
-            for i in tqdm(range(0, len(prompts), BATCH_SIZE), desc="Processing", ncols=100):
-                outputs.extend(paragraph_stylization(i, model, prompts, terminators, tokenizer))
+            # for i in tqdm(range(0, len(prompts), BATCH_SIZE), desc="Processing", ncols=100):
+            #     outputs.extend(paragraph_stylization(i, model, prompts, terminators, tokenizer))
+            outputs = paragraph_stylization(model, prompts, terminators, tokenizer)
 
             # Save the page generated
             if outputs:
@@ -62,12 +58,11 @@ def stylize(Args, pages, VOICE_CACHE):
     return processed
 
 
-def paragraph_stylization(i, model, prompts, terminators, tokenizer):
+def paragraph_stylization(model, prompts, terminators, tokenizer):
     outputs = []
-    batch = prompts[i: i + BATCH_SIZE]
     try:
         encoded = tokenizer(
-            batch,
+            prompts,
             return_tensors="pt",
             padding=True,
             truncation=False,
@@ -82,13 +77,14 @@ def paragraph_stylization(i, model, prompts, terminators, tokenizer):
                 eos_token_id=terminators,
                 pad_token_id=tokenizer.eos_token_id,
                 return_dict_in_generate=True,
+                return_legacy_cache=True
             )
 
         prompt_len = encoded["input_ids"].shape[1]
         sequences = generated.sequences
         generated_content = sequences[:, prompt_len:]
 
-        for b in range(len(batch)):
+        for b in range(len(prompts)):
             text = tokenizer.decode(generated_content[b], skip_special_tokens=True).strip()
             outputs.append(text)
 

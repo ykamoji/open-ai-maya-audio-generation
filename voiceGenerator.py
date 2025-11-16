@@ -64,17 +64,17 @@ class VoiceGenerator:
             limit = self.Args.Generator.PageLimit
 
         if self.Args.Step == 1:
-            print(f"Processing spellcheck and grammars for {notebook_name} {section_name}")
+            print(f"\nProcessing stylization for {notebook_name} {section_name}")
             contents_to_process = []
             for pageNo, page in enumerate(pages[:limit]):
                 if not self.VOICE_CACHE or page["title"] not in self.VOICE_CACHE:
                     contents_to_process.append(page)
 
             if contents_to_process:
-                print(f"Need to run spellcheck and grammars for {len(contents_to_process)} pages")
+                print(f"Need to stylize {len(contents_to_process)} pages")
                 spell_checked_paragraphs = stylize(self.Args, contents_to_process, self.VOICE_CACHE)
                 if spell_checked_paragraphs == len(contents_to_process):
-                    print(f"Spell check and grammar completed!")
+                    print(f"Stylize completed!")
                 else:
                     print(f"Something went wrong! Check the logs.")
 
