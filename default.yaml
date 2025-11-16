@@ -3,7 +3,7 @@ Graph:
   SectionName: "Book 5"
   RefreshPages: False
   EnvPath:
-  PageLimit:  # number(s) or empty
+  PageLimit:  2 # number(s) or empty
 Emotions:
   Quantize: False
   ModelPath:
@@ -11,7 +11,7 @@ Emotions:
     Kaggle: # For Kaggle, use internal cache
     Colab: /content/open-ai-maya-audio-generation/Models/
 Generator:
-  PageLimit:  # number(s) or empty
+  PageLimit:  2 # number(s) or empty
   PageNo:
   AudioOutputPath:
     Default: output/

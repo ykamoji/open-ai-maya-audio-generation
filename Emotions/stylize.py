@@ -23,47 +23,7 @@ Very important Guidelines:
 Return only the edited paragraph, clean and ready for audiobook production.
 """.strip()
 
-
-def generate_paragrpah(model, tokenizer, paragraph):
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": paragraph}
-    ]
-
-    prompt_text = tokenizer.apply_chat_template(
-        messages,
-        add_generation_prompt=True,
-        tokenize=False,
-    )
-
-    encoded = tokenizer(
-        prompt_text,
-        return_tensors="pt",
-        padding=True,
-        truncation=True,
-    )
-
-    input_ids = encoded["input_ids"].to(model.device)
-    attention_mask = encoded["attention_mask"].to(model.device)
-
-    terminators = [
-        tokenizer.eos_token_id,
-        tokenizer.convert_tokens_to_ids("<|eot_id|>")
-    ]
-
-    with torch.inference_mode():
-        output_ids = model.generate(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            max_new_tokens=1024,
-            do_sample=False,
-            eos_token_id=terminators,
-            pad_token_id=tokenizer.eos_token_id
-        )
-
-    decoded = output_ids[0][input_ids.shape[-1]:]
-
-    return tokenizer.decode(decoded, skip_special_tokens=True).strip()
+BATCH_SIZE = 2
 
 
 def stylize(Args, pages, VOICE_CACHE):
@@ -71,17 +31,24 @@ def stylize(Args, pages, VOICE_CACHE):
 
     model, tokenizer = getModelAndTokenizer(MODEL_PATH, Args.Emotions.Quantize, Args.Platform)
 
+    terminators = [
+        tokenizer.eos_token_id,
+        tokenizer.convert_tokens_to_ids("<|eot_id|>")
+    ]
+
     processed = 0
     for page in pages:
         print(f"\nRunning stylization on page {page['title']}.")
         content = page['content']
-        chunks = createChunks(content, limit=5000)
-        outputs = []
-        for paragraph in tqdm(chunks, desc="Processing", ncols=100):
-            stylized_paragraph = generate_paragrpah(model, tokenizer, paragraph)
-            outputs.append(stylized_paragraph)
-        torch.cuda.empty_cache()
 
+        chunks = createChunks(content, limit=5000)
+        prompts = generate_prompts(chunks, tokenizer)
+
+        outputs = []
+        for i in tqdm(range(0, len(prompts), BATCH_SIZE), desc="Processing", ncols=100):
+            outputs.extend(paragraph_stlyization(i, model, prompts, terminators, tokenizer))
+
+        torch.cuda.empty_cache()
         #Save the page generated
         if outputs:
             VOICE_CACHE[page["title"]] = outputs
@@ -89,3 +56,53 @@ def stylize(Args, pages, VOICE_CACHE):
             processed += 1
 
     return processed
+
+
+def paragraph_stlyization(i, model, prompts, terminators, tokenizer):
+    outputs = []
+    batch = prompts[i: i + BATCH_SIZE]
+
+    encoded = tokenizer(
+        batch,
+        return_tensors="pt",
+        padding=True,
+        truncation=True,
+    ).to('cuda')
+
+    with torch.inference_mode():
+        generated = model.generate(
+            input_ids=encoded["input_ids"],
+            attention_mask=encoded["attention_mask"],
+            max_new_tokens=256,
+            do_sample=False,
+            eos_token_id=terminators,
+            pad_token_id=tokenizer.eos_token_id
+        )
+
+    input_lengths = encoded["attention_mask"].sum(dim=1)
+
+    for b in range(len(batch)):
+        start = input_lengths[b]
+        new_tokens = generated[b][start:]
+        text = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+        outputs.append(text)
+
+    return outputs
+
+
+def generate_prompts(chunks, tokenizer):
+    prompts = []
+    for paragraph in tqdm(chunks, description="Generating prompts"):
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": paragraph}
+        ]
+
+        prompt_text = tokenizer.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            tokenize=False,
+        )
+
+        prompts.append(prompt_text)
+    return prompts
