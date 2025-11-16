@@ -60,7 +60,7 @@ def content_stats(content):
     }
 
 
-def createCache(file):
+def create_or_load_Cache(file):
     CACHE = {}
     if os.path.isfile(file):
         with open(file) as f:

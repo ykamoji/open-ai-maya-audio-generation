@@ -3,7 +3,7 @@ import os
 import yaml
 
 from analysis import analysis
-from utils import CustomObject, get_yaml_loader, updateCache, createCache, content_stats
+from utils import CustomObject, get_yaml_loader, updateCache, create_or_load_Cache, content_stats
 from GraphAPI.graphs import GraphAPI
 
 
@@ -11,8 +11,8 @@ class Initialization:
 
     def __init__(self):
 
-        self.CACHE = createCache('cache.json')
-        self.CONTENT_CACHE = createCache('contentCache.json')
+        self.CACHE = create_or_load_Cache('cache.json')
+        self.CONTENT_CACHE = create_or_load_Cache('contentCache.json')
 
         with open('default.yaml', 'r') as file:
             config = yaml.load(file, get_yaml_loader())
