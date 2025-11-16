@@ -92,6 +92,9 @@ def paragraph_stylization(model, prompts, terminators, tokenizer):
             text = tokenizer.decode(generated_content[b], skip_special_tokens=True).strip()
             outputs.append(text)
 
+    except Exception as e:
+        print(f"Error : {e}\n.")
+
     finally:
         del encoded, generated, sequences, generated_content
 
