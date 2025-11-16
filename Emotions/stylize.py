@@ -29,6 +29,8 @@ Very important Guidelines:
 Return only the edited paragraph, clean and ready for audiobook production.
 """.strip()
 
+BATCH_SIZE = 50
+
 
 def stylize(Args, pages, VOICE_CACHE):
     MODEL_PATH = Args.Emotions.ModelPath.__dict__[Args.Platform]
@@ -46,7 +48,10 @@ def stylize(Args, pages, VOICE_CACHE):
         try:
             chunks = createChunks(content, limit=5000)
             prompts = generate_prompts(chunks, tokenizer)
-            outputs = paragraph_stylization(model, prompts, terminators, tokenizer)
+            outputs = []
+            for i in range(0, len(prompts), BATCH_SIZE):
+                batch_prompts = prompts[i: i + BATCH_SIZE]
+                outputs.extend(paragraph_stylization(model, batch_prompts, terminators, tokenizer))
 
             # Save the page generated
             if outputs:
