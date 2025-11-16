@@ -29,8 +29,6 @@ Very important Guidelines:
 Return only the edited paragraph, clean and ready for audiobook production.
 """.strip()
 
-BATCH_SIZE = 50
-
 
 def stylize(Args, pages, VOICE_CACHE):
     MODEL_PATH = Args.Emotions.ModelPath.__dict__[Args.Platform]
@@ -47,6 +45,12 @@ def stylize(Args, pages, VOICE_CACHE):
         content = page['content']
         try:
             chunks = createChunks(content, limit=5000)
+
+            if len(chunks) > 45:
+                BATCH_SIZE = 45
+            else:
+                BATCH_SIZE = len(chunks)
+
             prompts = generate_prompts(chunks, tokenizer)
             outputs = []
             for i in range(0, len(prompts), BATCH_SIZE):
