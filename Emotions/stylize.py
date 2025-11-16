@@ -23,7 +23,7 @@ Very important Guidelines:
 Return only the edited paragraph, clean and ready for audiobook production.
 """.strip()
 
-BATCH_SIZE = 2
+BATCH_SIZE = 4
 
 
 def stylize(Args, pages, VOICE_CACHE):
@@ -73,7 +73,7 @@ def paragraph_stlyization(i, model, prompts, terminators, tokenizer):
         generated = model.generate(
             input_ids=encoded["input_ids"],
             attention_mask=encoded["attention_mask"],
-            max_new_tokens=256,
+            max_new_tokens=512,
             do_sample=False,
             eos_token_id=terminators,
             pad_token_id=tokenizer.eos_token_id

@@ -94,6 +94,7 @@ def getModelAndTokenizer(MODEL_PATH, quantize, platform):
 
     tokenizer = AutoTokenizer.from_pretrained(
         "meta-llama/Llama-3.1-8B-Instruct" if platform != 'Kaggle' else "/kaggle/input/llama-3-1-8b-instruct/transformers/1/1/Tokenizer",
+        padding_side="left",
         cache_dir=MODEL_PATH)
 
     tokenizer.pad_token = tokenizer.eos_token
