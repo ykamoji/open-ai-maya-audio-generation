@@ -92,7 +92,7 @@ def paragraph_stlyization(i, model, prompts, terminators, tokenizer):
 
 def generate_prompts(chunks, tokenizer):
     prompts = []
-    for paragraph in tqdm(chunks, description="Generating prompts"):
+    for paragraph in tqdm(chunks, desc="Generating prompts"):
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": paragraph}
