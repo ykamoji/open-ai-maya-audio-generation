@@ -250,11 +250,12 @@ def detect_and_rank_with_context(i, sentences, model, tokenizer):
         logger.info(f"Model returned {tags} emotions for \"{curr_s}\".")
 
         # Re ranking. Available genre: normal, YA, fantasy, drama
-        # tags = strict_rerank(curr_s, prev_s, next_s, tags, genre='normal', top_k=3)
-        # logger.info(f"Re ranking updated {tags} emotions for \"{curr_s}\".")
+        candidate_tags = [tag.replace('[','').replace(']','') for tag in tags]
+        tags = strict_rerank(curr_s, prev_s, next_s, candidate_tags, genre='normal', top_k=3)
+        logger.info(f"Re ranking updated {tags} emotions for \"{curr_s}\".")
 
     except Exception as e:
-        logger.error(f"Exception: {e}. Returning no emotion for \"{curr_s}\".")
+        logger.error(f"Exception: {e}. Model not returning any emotion for \"{curr_s}\".")
 
     finally:
         del decoded, output, inputs
@@ -394,14 +395,14 @@ def process_detection(paragraph, model, tokenizer):
                 if tags[0] not in DEFAULT_PRESETS:
                     detections.append((i, s, tags[0]))
                 else:
-                    logger.info(f"Running custom rules on \"{s}\" for {tags[0]}: {modified_lines[i]}.")
+                    logger.info(f"Running custom rules on \"{s}\" for {tags[0]}")
                     modified_lines[i] = process_emotion_rules(s, tags[0])
-                    logger.info(f"Running custom rules on \"{s}\" for {tags[0]}: {modified_lines[i]}.")
+                    logger.info(f"Running custom rules on \"{s}\" for {tags[0]}: \"{modified_lines[i]}\"")
             else:
-                logger.info(f"No emotion for \"{s}\" detected")
+                logger.info(f"No emotion for detected \"{s}\"")
                 modified_lines[i] = s
     except Exception as e:(
-        logger.error(f"Exception: {e}. Not inserting emotion to this batch."))
+        logger.error(f"Exception: {e}. Skipping detecting emotion on this batch."))
 
     return modified_lines, detections
 
