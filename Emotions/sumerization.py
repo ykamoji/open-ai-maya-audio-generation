@@ -144,12 +144,13 @@ def summarization(Args, pages, TITLE_CACHE):
                 for cat in summary:
                     suggestions.append(summary[cat])
 
-                best = None
+                previous_suggestion = []
                 if page['title'] in TITLE_CACHE:
-                    TITLE_CACHE[page['title']]["best"] = best
+                    previous_suggestion = TITLE_CACHE[page['title']]["suggestions"]
                 else:
                     TITLE_CACHE[page['title']] = {}
-                TITLE_CACHE[page['title']]['suggestions'] = suggestions
+
+                TITLE_CACHE[page['title']]['suggestions'] = previous_suggestion + suggestions
                 updateCache('titleCache.json', TITLE_CACHE)
                 processed += 1
             else:
