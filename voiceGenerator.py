@@ -137,12 +137,10 @@ class VoiceGenerator:
             print(f"\nStarting summarization for {notebook_name} {section_name}.")
             contents_to_process = []
             for key in self.VOICE_CACHE:
-                if not self.TITLE_CACHE or key not in self.TITLE_CACHE \
-                        or "suggestions" not in self.TITLE_CACHE[key] or not self.TITLE_CACHE[key]["suggestions"]:
-                    contents_to_process.append({
-                        "title": key,
-                        "content": self.VOICE_CACHE[key],
-                    })
+                contents_to_process.append({
+                    "title": key,
+                    "content": self.VOICE_CACHE[key],
+                })
 
             if contents_to_process:
                 print(f"Need to summarize {len(contents_to_process)} pages")
