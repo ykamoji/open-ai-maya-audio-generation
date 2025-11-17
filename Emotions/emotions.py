@@ -252,7 +252,7 @@ def detect_and_rank_with_context(i, sentences, model, tokenizer):
         try:
             # Re ranking. Available genre: normal, YA, fantasy, drama
             candidate_tags = [tag.replace('[','').replace(']','').lower() for tag in tags]
-            tags = strict_rerank(curr_s, prev_s, next_s, candidate_tags, genre='normal', top_k=3)
+            tags = strict_rerank(curr_s, prev_s, next_s, candidate_tags, genre='YA', top_k=3)
             logger.info(f"Re ranking updated {tags} emotions for \"{curr_s}\".")
         except Exception as e:
             logger.error(f"Re ranking exception: {e}. \"{curr_s}\" \"{prev_s}\" \"{next_s}\" {tags}")
