@@ -255,7 +255,7 @@ def detect_and_rank_with_context(i, sentences, model, tokenizer):
             tags = strict_rerank(curr_s, prev_s, next_s, candidate_tags, genre='normal', top_k=3)
             logger.info(f"Re ranking updated {tags} emotions for \"{curr_s}\".")
         except Exception as e:
-            logger.error(f"Re ranking exception: {e}. \"{curr_s}\" \"{prev_s}\" \"{next_s}\" {candidate_tags}")
+            logger.error(f"Re ranking exception: {e}. \"{curr_s}\" \"{prev_s}\" \"{next_s}\" {tags}")
 
     except Exception as e:
         logger.error(f"Exception: {e}. Model not returning any emotion for \"{curr_s}\"")
