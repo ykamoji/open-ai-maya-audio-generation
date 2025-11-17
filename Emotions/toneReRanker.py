@@ -27,14 +27,18 @@ REQUIRED_MIN_SCORE = {
 }
 
 FALSE_POSITIVE_PENALTY = {
-    "sigh": 0.8,
-    "exhale": 0.8,
-    "curious": 0.8,
-    "chuckle": 0.6,
-    "giggle": 0.6,
-    "whisper": 0.5,
-    "gasp": 0.3,
+    # Breath / subtle sounds (still risky, but not crippling)
+    "sigh": 0.35,
+    "exhale": 0.35,
+    "gasp": 0.25,
 
+    # Low-intensity social sounds (was too harsh before)
+    "curious": 0.30,
+    "chuckle": 0.25,
+    "giggle": 0.25,
+    "whisper": 0.20,
+
+    # Emotional high-confidence tags (keep at zero)
     "angry": 0.0,
     "sarcastic": 0.0,
     "excited": 0.0,
@@ -218,6 +222,7 @@ def apply_genre_rules(tag, text, prev_text, next_text, base_score, genre):
 
 def strict_rerank(text, prev_text, next_text, candidate_tags, genre="normal", top_k=2):
     results = []
+    score = None
     for tag in candidate_tags:
         les = score_lexical(tag, text)
         pps = score_punctuation(text)
@@ -230,11 +235,12 @@ def strict_rerank(text, prev_text, next_text, candidate_tags, genre="normal", to
         # apply genre rules
         final_score = apply_genre_rules(tag, text, prev_text, next_text, base_score, genre)
 
+        score = final_score
         if final_score >= required:
             results.append((tag, final_score))
 
     results.sort(key=lambda x: x[1], reverse=True)
-    return [tag.upper() for tag, _ in results[:top_k]]
+    return [tag.upper() for tag, _ in results[:top_k]], round(score, 2)
 
 # ---------------------------------------------------------
 # Example
