@@ -228,7 +228,7 @@ def build_detection_prompt(prev_s, curr_s, next_s):
 def detect_and_rank_with_context(i, sentences, model, tokenizer):
     prev_s, curr_s, next_s = get_context(i, sentences)
 
-    logger.info(f"Running emotion detection for {curr_s}.")
+    logger.info(f"Running emotion detection for \"{curr_s}\"")
     prompt = build_detection_prompt(prev_s, curr_s, next_s)
 
     tags = []
@@ -250,17 +250,22 @@ def detect_and_rank_with_context(i, sentences, model, tokenizer):
         logger.info(f"Model returned {tags} emotions for \"{curr_s}\".")
 
         # Re ranking. Available genre: normal, YA, fantasy, drama
-        candidate_tags = [tag.replace('[','').replace(']','') for tag in tags]
-        tags = strict_rerank(curr_s, prev_s, next_s, candidate_tags, genre='normal', top_k=3)
-        logger.info(f"Re ranking updated {tags} emotions for \"{curr_s}\".")
+        try:
+            candidate_tags = [tag.replace('[','').replace(']','') for tag in tags]
+            tags = strict_rerank(curr_s, prev_s, next_s, candidate_tags, genre='normal', top_k=3)
+            logger.info(f"Re ranking updated {tags} emotions for \"{curr_s}\".")
+        except Exception as e:
+            logger.error(f"Re ranking exception: {e}. \"{curr_s}\" \"{prev_s}\" \"{next_s}\" {candidate_tags}")
 
     except Exception as e:
-        logger.error(f"Exception: {e}. Model not returning any emotion for \"{curr_s}\".")
+        logger.error(f"Exception: {e}. Model not returning any emotion for \"{curr_s}\"")
 
     finally:
-        del decoded, output, inputs
+        for var in ["decoded", "output", "inputs"]:
+            if var in locals():
+                del locals()[var]
 
-    logger.info(f"Completed emotion {tags} for \"{curr_s}\".")
+    logger.info(f"Completed emotion {tags} for \"{curr_s}\"")
     return tags
 
 
@@ -376,7 +381,9 @@ def insert_emotion_tag(sentences, tags, model, tokenizer):
     except Exception as e:
         logger.error(f"Exception: {e}. Not inserting emotion to this batch.")
     finally:
-        del inputs, outputs, batch_decoded
+        for var in ["batch_decoded", "output", "inputs"]:
+            if var in locals():
+                del locals()[var]
 
     return modified_sentences
 
@@ -399,7 +406,7 @@ def process_detection(paragraph, model, tokenizer):
                     modified_lines[i] = process_emotion_rules(s, tags[0])
                     logger.info(f"Running custom rules on \"{s}\" for {tags[0]}: \"{modified_lines[i]}\"")
             else:
-                logger.info(f"No emotion for detected \"{s}\"")
+                logger.info(f"No emotion detected for \"{s}\"")
                 modified_lines[i] = s
     except Exception as e:(
         logger.error(f"Exception: {e}. Skipping detecting emotion on this batch."))
@@ -465,12 +472,12 @@ def addEmotions(Args, pages, EMOTION_CACHE):
     global global_tag_counts
 
     progress = 0
-    for page in tqdm(pages, desc="Pages", ncols=100, position=0, leave=False):
+    for page in tqdm(pages, desc="Pages", ncols=100, position=0):
         logger.info(f"Starting {page['title']}...")
         content = page['content']
         outputs = []
         try:
-            for paragraph in tqdm(content, desc="Paragraphs", ncols=50, position=1, leave=False):
+            for paragraph in tqdm(content, desc="Paragraphs", ncols=90, position=1):
                 outputs.extend(process_paragraph(paragraph, model, tokenizer))
 
             if outputs:
