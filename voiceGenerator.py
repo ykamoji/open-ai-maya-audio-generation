@@ -1,12 +1,16 @@
 import os
 import glob
 import json
+import random
 import yaml
 import time
+import re
 import argparse
 import soundfile as sf
 import numpy as np
 from tqdm import tqdm
+
+from Emotions.sumerization import summarization
 from utils import create_or_load_Cache
 from Emotions.stylize import stylize
 from Emotions.emotions import addEmotions
@@ -38,7 +42,7 @@ class VoiceGenerator:
         self.Args = json.loads(x, object_hook=lambda d: CustomObject(**d))
 
         self.Args.Platform = args.config
-        self.Args.Step = float(args.step)
+        self.Args.Step = int(args.step)
 
         with open('contentCache.json') as f:
             self.CONTENT_CACHE = json.load(f)
@@ -57,7 +61,19 @@ class VoiceGenerator:
         return data
 
     def add_title(self, notebook_name, section_name, title):
-        return title + " " + self.TITLE_CACHE.get(notebook_name, {}).get(section_name, {}).get(title, [None])[0]
+        number = re.search(r"(?i)\bchat?pter\s*#?\s*(\d+)", title).group(1)
+        titles = self.TITLE_CACHE.get(notebook_name, {}).get(section_name, {}).get(title, [None])
+        title = ""
+        if "best" in titles:
+            title = titles["best"]
+        else:
+            all_suggestions = []
+            for cat in titles["suggestions"]:
+                all_suggestions.extend(cat)
+            if all_suggestions:
+                title = random.choice(all_suggestions)
+
+        return f"Chapter {number} " + title
 
     def generation(self):
 
@@ -70,10 +86,10 @@ class VoiceGenerator:
         if self.Args.Generator.PageLimit:
             limit = self.Args.Generator.PageLimit
 
-        if self.Args.Step == 1:
-            print(f"\nProcessing stylization for {notebook_name} {section_name}")
+        if self.Args.Step >= 1:
+            print(f"\nProcessing stylization for {notebook_name} {section_name}.")
             contents_to_process = []
-            for pageNo, page in enumerate(pages[:limit]):
+            for page in pages[:limit]:
                 if not self.VOICE_CACHE or page["title"] not in self.VOICE_CACHE:
                     contents_to_process.append(page)
 
@@ -85,7 +101,7 @@ class VoiceGenerator:
                 else:
                     print(f"Something went wrong! Check the logs.")
 
-        if self.Args.Step == 1.5:
+        if self.Args.Step >= 2:
             print(f"Starting post processing for voice texts.")
             for key in tqdm(self.VOICE_CACHE, desc=f"Processing content"):
                 split_paragraph = False
@@ -117,15 +133,34 @@ class VoiceGenerator:
             updateCache('voiceCache.json', self.VOICE_CACHE)
             print(f"Post processing completed voice texts.")
 
-        if self.Args.Step == 2:
+        if self.Args.Step >= 3:
+            print(f"\nStarting summarization for {notebook_name} {section_name}.")
+            contents_to_process = []
+            for key in tqdm(self.VOICE_CACHE, desc=f"Processing content"):
+                if not self.TITLE_CACHE or key not in self.TITLE_CACHE \
+                        or "suggestions" not in self.TITLE_CACHE[key] or not self.TITLE_CACHE[key]["suggestions"]:
+                    contents_to_process.append({
+                        "title": key,
+                        "content": self.VOICE_CACHE[key],
+                    })
+
+            if contents_to_process:
+                print(f"Need to summarize {len(contents_to_process)} pages")
+                summarized_paragraphs = summarization(self.Args, contents_to_process, self.TITLE_CACHE)
+                if summarized_paragraphs == len(contents_to_process):
+                    print(f"Summarization completed!")
+                else:
+                    print(f"Something went wrong! Check the logs.")
+
+        if self.Args.Step >= 4:
             print(f"Creating Emotions for {notebook_name} {section_name}")
             contents_to_process = []
-            for pageNo, page in enumerate(pages[:limit]):
+            for page in pages[:limit]:
                 if not self.EMOTION_CACHE or page["title"] not in self.EMOTION_CACHE:
                     contents_to_process.append(
                         {
                             "title": page["title"],
-                            "suggested_title" : self.add_title(notebook_name, section_name, page["title"]),
+                            "suggested_title": self.add_title(notebook_name, section_name, page["title"]),
                             "content": self.VOICE_CACHE[page["title"]]
                         })
             if contents_to_process:
@@ -136,7 +171,7 @@ class VoiceGenerator:
                 else:
                     print(f"Something went wrong! Check the logs.")
 
-        if self.Args.Step == 3:
+        if self.Args.Step == 5:
             end = len(pages[:limit]) - 1
             outputPath = self.Args.Generator.AudioOutputPath.__dict__[self.Args.Platform]
             for pageNo, page in enumerate(pages[:limit]):

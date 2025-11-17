@@ -16,6 +16,8 @@ class GraphAPI:
 
         load_dotenv(Args.EnvPath, override=True)
 
+    def setHeaders(self):
+
         if "GRAPH_ACCESS_TOKEN" not in os.environ:
             raise Exception("Load Graph Access token first !")
 
@@ -27,7 +29,7 @@ class GraphAPI:
         }
 
     def commonGetAPI(self, api_name, url):
-
+        self.setHeaders()
         print(f"Running {api_name}")
         response = requests.get(url, headers=self.headers)
         if response.status_code != 200:
@@ -57,6 +59,7 @@ class GraphAPI:
         return response["value"]
 
     def getPagesList(self, section_id):
+        self.setHeaders()
         print("Running Pages List API")
 
         response = requests.get(C.PAGES_LIST_URL.replace("{}", section_id), headers=self.headers)
@@ -83,6 +86,7 @@ class GraphAPI:
         return pages_list
 
     def getContent(self, page_id):
+        self.setHeaders()
         print("Running Page Content API")
 
         self.headers["Content-Type"] = "text/html"
