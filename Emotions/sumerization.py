@@ -142,7 +142,7 @@ def summarization(Args, pages, TITLE_CACHE):
             if summary:
                 suggestions = []
                 for cat in summary:
-                    suggestions.append(summary[cat])
+                    suggestions.extend(summary[cat])
 
                 previous_suggestion = []
                 if page['title'] in TITLE_CACHE:

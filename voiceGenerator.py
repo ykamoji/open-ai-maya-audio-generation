@@ -87,13 +87,13 @@ class VoiceGenerator:
             limit = self.Args.Generator.PageLimit
 
         if self.Args.Step >= 1:
-            print(f"\nProcessing stylization for {notebook_name} {section_name}.")
             contents_to_process = []
             for page in pages[:limit]:
                 if not self.VOICE_CACHE or page["title"] not in self.VOICE_CACHE:
                     contents_to_process.append(page)
 
             if contents_to_process:
+                print(f"\nProcessing stylization for {notebook_name} {section_name}.")
                 print(f"Need to stylize {len(contents_to_process)} pages")
                 spell_checked_paragraphs = stylize(self.Args, contents_to_process, self.VOICE_CACHE)
                 if spell_checked_paragraphs == len(contents_to_process):
@@ -136,7 +136,7 @@ class VoiceGenerator:
         if self.Args.Step >= 3:
             print(f"\nStarting summarization for {notebook_name} {section_name}.")
             contents_to_process = []
-            for key in tqdm(self.VOICE_CACHE, desc=f"Processing content"):
+            for key in self.VOICE_CACHE:
                 if not self.TITLE_CACHE or key not in self.TITLE_CACHE \
                         or "suggestions" not in self.TITLE_CACHE[key] or not self.TITLE_CACHE[key]["suggestions"]:
                     contents_to_process.append({
