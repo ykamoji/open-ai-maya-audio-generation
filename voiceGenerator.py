@@ -66,12 +66,8 @@ class VoiceGenerator:
         title = ""
         if "best" in titles:
             title = titles["best"]
-        else:
-            all_suggestions = []
-            for cat in titles["suggestions"]:
-                all_suggestions.extend(cat)
-            if all_suggestions:
-                title = random.choice(all_suggestions)
+        elif "suggestion" in titles:
+            title = random.choice(titles["suggestion"])
 
         return f"Chapter {number} " + title
 
@@ -133,7 +129,7 @@ class VoiceGenerator:
             updateCache('voiceCache.json', self.VOICE_CACHE)
             print(f"Post processing completed voice texts.")
 
-        if self.Args.Step >= 3:
+        if self.Args.Step >= 3 and not self.Args.Generator.SkipTitleGeneration:
             print(f"\nStarting summarization for {notebook_name} {section_name}.")
             contents_to_process = []
             for key in self.VOICE_CACHE:

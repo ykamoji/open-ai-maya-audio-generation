@@ -11,7 +11,7 @@ from Emotions.utils import getModelAndTokenizer, split_sentences
 from utils import updateCache
 
 logging.basicConfig(
-    filename='app.log',
+    filename='emotions.log',
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
