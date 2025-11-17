@@ -10,6 +10,9 @@ from Emotions.toneReRanker import strict_rerank
 from Emotions.utils import getModelAndTokenizer, split_sentences
 from utils import updateCache
 
+if os.path.isfile('emotions.log'):
+    os.remove('emotions.log')
+
 logging.basicConfig(
     filename='emotions.log',
     level=logging.INFO,
@@ -244,19 +247,19 @@ def detect_and_rank_with_context(i, sentences, model, tokenizer):
 
         tags = extract_emotion_tags(decoded)
 
-        logger.info(f"Model returned {tags} emotions for {curr_s}.")
+        logger.info(f"Model returned {tags} emotions for \"{curr_s}\".")
 
         # Re ranking. Available genre: normal, YA, fantasy, drama
-        tags = strict_rerank(curr_s, prev_s, next_s, tags, genre='normal', top_k=3)
-        logger.info(f"Re ranking updated {tags} emotions for {curr_s}.")
+        # tags = strict_rerank(curr_s, prev_s, next_s, tags, genre='normal', top_k=3)
+        # logger.info(f"Re ranking updated {tags} emotions for \"{curr_s}\".")
 
     except Exception as e:
-        logger.error(f"Exception: {e}. Returning no emotion for {curr_s}.")
+        logger.error(f"Exception: {e}. Returning no emotion for \"{curr_s}\".")
 
     finally:
         del decoded, output, input
 
-    logger.info(f"Completed emotion {tags} for {curr_s}.")
+    logger.info(f"Completed emotion {tags} for \"{curr_s}\".")
     return tags
 
 
@@ -390,11 +393,11 @@ def process_detection(paragraph, model, tokenizer):
             if tags[0] not in DEFAULT_PRESETS:
                 detections.append((i, s, tags[0]))
             else:
-                logger.info(f"Running custom rules on {s} for {tags[0]}: {modified_lines[i]}.")
+                logger.info(f"Running custom rules on \"{s}\" for {tags[0]}: {modified_lines[i]}.")
                 modified_lines[i] = process_emotion_rules(s, tags[0])
-                logger.info(f"Running custom rules on {s} for {tags[0]}: {modified_lines[i]}.")
+                logger.info(f"Running custom rules on \"{s}\" for {tags[0]}: {modified_lines[i]}.")
         else:
-            logger.info(f"No emotion for {s} detected")
+            logger.info(f"No emotion for \"{s}\" detected")
             modified_lines[i] = s
 
     return modified_lines, detections
