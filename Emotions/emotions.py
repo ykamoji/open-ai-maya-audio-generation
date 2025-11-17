@@ -257,7 +257,7 @@ def detect_and_rank_with_context(i, sentences, model, tokenizer):
         logger.error(f"Exception: {e}. Returning no emotion for \"{curr_s}\".")
 
     finally:
-        del decoded, output, input
+        del decoded, output, inputs
 
     logger.info(f"Completed emotion {tags} for \"{curr_s}\".")
     return tags
