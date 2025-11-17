@@ -1,6 +1,6 @@
 import re
 import json
-from sympy.printing.pytorch import torch
+import torch
 from tqdm import tqdm
 from Emotions.utils import getModelAndTokenizer
 from utils import updateCache
