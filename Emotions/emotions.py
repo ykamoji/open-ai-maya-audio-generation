@@ -387,18 +387,21 @@ def process_detection(paragraph, model, tokenizer):
     sentences = split_sentences(paragraph)
     detections = []
     modified_lines = {}
-    for i, s in enumerate(sentences):
-        tags = detect_and_rank_with_context(i, sentences, model, tokenizer)
-        if tags:
-            if tags[0] not in DEFAULT_PRESETS:
-                detections.append((i, s, tags[0]))
+    try:
+        for i, s in enumerate(sentences):
+            tags = detect_and_rank_with_context(i, sentences, model, tokenizer)
+            if tags:
+                if tags[0] not in DEFAULT_PRESETS:
+                    detections.append((i, s, tags[0]))
+                else:
+                    logger.info(f"Running custom rules on \"{s}\" for {tags[0]}: {modified_lines[i]}.")
+                    modified_lines[i] = process_emotion_rules(s, tags[0])
+                    logger.info(f"Running custom rules on \"{s}\" for {tags[0]}: {modified_lines[i]}.")
             else:
-                logger.info(f"Running custom rules on \"{s}\" for {tags[0]}: {modified_lines[i]}.")
-                modified_lines[i] = process_emotion_rules(s, tags[0])
-                logger.info(f"Running custom rules on \"{s}\" for {tags[0]}: {modified_lines[i]}.")
-        else:
-            logger.info(f"No emotion for \"{s}\" detected")
-            modified_lines[i] = s
+                logger.info(f"No emotion for \"{s}\" detected")
+                modified_lines[i] = s
+    except Exception as e:(
+        logger.error(f"Exception: {e}. Not inserting emotion to this batch."))
 
     return modified_lines, detections
 
