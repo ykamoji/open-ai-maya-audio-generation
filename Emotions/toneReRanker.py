@@ -218,7 +218,6 @@ def apply_genre_rules(tag, text, prev_text, next_text, base_score, genre):
 
 def strict_rerank(text, prev_text, next_text, candidate_tags, genre="normal", top_k=2):
     results = []
-
     for tag in candidate_tags:
         les = score_lexical(tag, text)
         pps = score_punctuation(text)
@@ -247,6 +246,6 @@ if __name__ == "__main__":
     curr_s = "She whispered the old prophecy under her breath."
     next_s = "The cavern trembled softly."
 
-    model_tags = ["GASP", "CURIOUS", "WHISPER"]
+    model_tags = ["EXCITED", "CURIOUS", "WHISPER"]
 
     print(strict_rerank(curr_s, prev_s, next_s, [t.lower() for t in model_tags], genre="fantasy"))
