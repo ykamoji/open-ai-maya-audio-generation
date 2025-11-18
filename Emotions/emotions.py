@@ -6,7 +6,7 @@ import logging
 import pandas as pd
 from tqdm import tqdm
 from collections import Counter, deque
-from Emotions.toneReRanker import strict_rerank
+from Emotions.toneReRanker import rerank
 from Emotions.utils import getModelAndTokenizer, split_sentences
 from utils import updateCache
 
@@ -25,13 +25,13 @@ TAG_STATS_PATH = 'emotion_stats.csv'
 UNKNOWN_STATS_PATH = "unknown_stats.csv"
 unknown_tag_log = Counter()
 
-
 TONES = [
-    "[ANGRY]", "[EXCITED]", "[SARCASTIC]", "[WHISPER]", "[CURIOUS]", "[SCREAM]", "[SING]"
+    "[ANGRY]", "[EXCITED]", "[SARCASTIC]", "[CURIOUS]", "[SING]"
 ]
 
 SOUNDS = [
-    "[LAUGH]", "[LAUGH_HARDER]", "[SIGH]", "[CHUCKLE]", "[GASP]", "[CRY]", "[SNORT]", "[EXHALE]", "[GULP]", "[GIGGLE]"
+    "[LAUGH]", "[LAUGH_HARDER]", "[SIGH]", "[CHUCKLE]", "[GASP]", "[CRY]", "[SCREAM]", "[WHISPER]", "[SNORT]",
+    "[EXHALE]", "[GULP]", "[GIGGLE]"
 ]
 
 TONES_SET = set(TONES)
@@ -42,34 +42,34 @@ TTS_TAGS_SET = set(TTS_TAGS)
 
 TTS_TAGS_STR = ", ".join(TTS_TAGS)
 
+USE_LLAMA_CPP = True
 
 if os.path.exists(TAG_STATS_PATH):
     df_stats = pd.read_csv(TAG_STATS_PATH)
     global_tag_counts = Counter(dict(zip(df_stats["emotion"], df_stats["count"])))
 else:
     tag_tracker = {
-        tag.replace("[", "").replace("]", "").lower() : 0
+        tag.replace("[", "").replace("]", "").lower(): 0
         for tag in TTS_TAGS
     }
     global_tag_counts = Counter(tag_tracker)
 
-HISTORY_WINDOW = 50
+HISTORY_WINDOW = 4
 recent_tag_history = deque(maxlen=HISTORY_WINDOW)
 
 
 def penalty_tag_check(tag):
-
     recent_counts = Counter(recent_tag_history)
     if not recent_counts:
         return True
 
     penalty_strength = {}
-    for tag, cnt in recent_counts.items():
-        penalty_strength[tag] = cnt
+    for t, cnt in recent_counts.items():
+        penalty_strength[t] = cnt
 
     sorted_tags = sorted(penalty_strength.items(), key=lambda x: x[1], reverse=True)
 
-    high_frequency = [t for t, s in sorted_tags if s > 10]
+    high_frequency = [t for t, s in sorted_tags if s > 2]
 
     if tag in high_frequency:
         return False
@@ -78,16 +78,17 @@ def penalty_tag_check(tag):
 
 
 def normalize_tags(text):
+
     def repl(match):
         tag = match.group(1).lower()
 
         global_tag_counts[tag] += 1
         recent_tag_history.append(tag)
 
-        if penalty_tag_check(tag):
+        if len(text.split()) < 5 or penalty_tag_check(tag):
             return f"<{tag}>"
         else:
-            logger.warning(f"{tag} is being used very frequently, not inserting in {text}")
+            logger.warning(f"{tag} is being used very frequently, not inserting in \"{text}\"")
             return ""
 
     return re.sub(r"\[([A-Za-z0-9_]+)\]", repl, text)
@@ -128,8 +129,11 @@ def save_unknown_tag_log():
     merged.to_csv(UNKNOWN_STATS_PATH, index=False)
 
 
-def extract_emotion_tags(text: str):
-    output = text[text.find("Answer:"):]
+def extract_emotion_tags(text):
+    start_pos = text.find("Answer:")
+    if start_pos == -1:
+        return []
+    output = text[start_pos:]
     match = re.search(r'"tags"\s*:\s*\[([^\]]*)\]', output)
     if match:
         inner = match.group(1)
@@ -173,14 +177,12 @@ def build_detection_prompt(prev_s, curr_s, next_s):
         TASK:
         1. Identify all tags that match the emotional tone of the TARGET sentence.
         2. Rank them by strength.
-        3. Return ONLY the top three tags (0–3 tags).
+        3. Return ONLY the top two tags (0–2 tags).
 
         OUTPUT FORMAT (STRICT):
             - If 0 tags match → {{"tags": []}}
             - If 1 tag matches → {{"tags": ["TAG1"]}}
-            - If 2 tags match → {{"tags": ["TAG1", "TAG2"]}}
-            - If 3+ tags match → {{"tags": ["TAG1", "TAG2", "TAG3"]}}
-
+            - If 2+ tags match → {{"tags": ["TAG1", "TAG2"]}}
 
         EXAMPLE 1 (emotional)
         PREVIOUS: He clenched the letter tightly.
@@ -225,48 +227,73 @@ def build_detection_prompt(prev_s, curr_s, next_s):
         """
 
 
-def detect_and_rank_with_context(i, sentences, model, tokenizer):
-    prev_s, curr_s, next_s = get_context(i, sentences)
+def detect_and_rank_batch(indices, sentences, model, tokenizer):
 
-    logger.info(f"Running emotion detection for \"{curr_s}\"")
-    prompt = build_detection_prompt(prev_s, curr_s, next_s)
+    outputs = [[]] * len(indices)
 
-    tags = []
-    try:
-        inputs = tokenizer(prompt, return_tensors="pt").to('cuda')
+    for start in range(0, len(indices), 2):
+        chunk = indices[start:start + 2]
+        prompts = []
+        for idx in chunk:
+            prev_s, curr_s, next_s = get_context(idx, sentences)
+            prompts.append(build_detection_prompt(prev_s, curr_s, next_s))
 
-        with torch.inference_mode():
-            output = model.generate(
-                **inputs,
-                max_new_tokens=50,
-                do_sample=False,
-                temperature=0.0
-            )
+        lines = "\n".join([sentences[idx] for idx in chunk])
+        logger.debug(f"Running emotion detection for \"{lines}\"")
+        if USE_LLAMA_CPP:
+            batch_results = []
+            for prompt in prompts:
+                try:
+                    result = model(
+                        prompt,
+                        max_tokens=50,
+                        temperature=0.0,
+                        top_k=1,
+                        top_p=1.0,
+                        repeat_penalty=1.0,
+                    )
+                    text = "Answer: " + result["choices"][0]["text"]
+                except Exception as e:
+                    logger.error(f"Exception: {e}. Model cannot detect emotions.")
+                    text = "Answer: "
+                batch_results.append(text)
+        else:
+            try:
+                inputs = tokenizer(prompts, return_tensors="pt", padding=True).to("cuda")
+                with torch.inference_mode():
+                    out = model.generate(
+                        **inputs,
+                        max_new_tokens=50,
+                        do_sample=False,
+                        temperature=0.0,
+                    )
+                batch_results = tokenizer.batch_decode(out, skip_special_tokens=True)
+            except Exception as e:
+                logger.error(f"Exception: {e}. Model cannot detect emotions.")
+                batch_results = []
+            finally:
+                for var in ["out", "inputs"]:
+                    if var in locals():
+                        del locals()[var]
 
-        decoded = tokenizer.decode(output[0], skip_special_tokens=True).strip()
+        for local_i, idx in enumerate(chunk):
+            try:
+                base_tags = extract_emotion_tags(batch_results[local_i])
+                logger.debug(f"Model returned {base_tags} emotions for \"{sentences[idx]}\"")
+                candidate_tags = [
+                    t.replace("[", "").replace("]", "").lower()
+                    for t in base_tags
+                ]
+                updated, scores = rerank(sentences[idx], candidate_tags, genre="YA", top_k=2)
+                if len(base_tags) > 0:
+                    if len(candidate_tags) == 0 or base_tags[0] != candidate_tags[0]:
+                        logger.warning(f"Re ranking updated from {base_tags} to {updated} ({scores}) emotions for \"{sentences[idx]}\"")
+                outputs[indices.index(idx)] = updated
+            except Exception as e:
+                logger.error(f"Exception in rerank batch: {e}")
+                outputs[indices.index(idx)] = []
 
-        tags = extract_emotion_tags(decoded)
-
-        logger.info(f"Model returned {tags} emotions for \"{curr_s}\".")
-
-        # try:
-            # Re ranking. Available genre: normal, YA, fantasy, drama
-            # candidate_tags = [tag.replace('[','').replace(']','').lower() for tag in tags]
-            # tags, score = strict_rerank(curr_s, prev_s, next_s, candidate_tags, genre='YA', top_k=3)
-            # logger.info(f"Re ranking updated {tags} ({score}) emotions for \"{curr_s}\".")
-        # except Exception as e:
-            # logger.error(f"Re ranking exception: {e}. \"{curr_s}\" \"{prev_s}\" \"{next_s}\" {tags}")
-
-    except Exception as e:
-        logger.error(f"Exception: {e}. Model not returning any emotion for \"{curr_s}\"")
-
-    finally:
-        for var in ["decoded", "output", "inputs"]:
-            if var in locals():
-                del locals()[var]
-
-    logger.info(f"Completed emotion {tags} for \"{curr_s}\"")
-    return tags
+    return outputs
 
 
 def index_sentence(sentence: str):
@@ -275,9 +302,15 @@ def index_sentence(sentence: str):
 
 
 def extract_index(text: str):
+    start_pos = text.find("Answer:")
+    if start_pos == -1:
+        return None
     output = text[text.find("Answer:") - 50:]
-    m = re.search(r'\d+', output)
-    return int(m.group()) if m else None
+    m = re.search(r'\b(END|\d+)\b', output)
+    if m:
+        val = m.group(1)
+        return int(val) if val.isdigit() else val
+    return None
 
 
 def safe_insert(sentence: str, index, tag: str):
@@ -295,12 +328,38 @@ def shift_emotion_inside(sentence):
     pattern = re.compile(r'^(.*?)([\.!?]["\']?)\s*(\[[A-Za-z0-9_]+\])\s*$')
 
     m = pattern.match(sentence)
-    if not m:
-        return sentence  # Nothing to fix
+    if m:
+        before, punctuation, tag = m.groups()
+        sentence = f"{before} {tag}{punctuation}"
 
-    before, punctuation, tag = m.groups()
+    if '[LAUGH]' in sentence:
 
-    return f"{before} {tag}{punctuation}"
+        # Detect [LAUGH] at the beginning
+        begin_pattern = re.compile(r"^\s*[\.\!\?]?\s*\[LAUGH\]")
+
+        # Detect [LAUGH] at end
+        end_pattern = re.compile(r"\[LAUGH\][\.\!\?]?\s*$")
+
+        # If at beginning or end → do nothing
+        if begin_pattern.search(sentence) or end_pattern.search(sentence):
+            return sentence
+
+        # Detect ANY punctuation before [LAUGH], with optional spaces
+        punctuation_before_pattern = re.compile(r"[^\w\s]\s*\[LAUGH\]")
+
+        if punctuation_before_pattern.search(sentence):
+            return sentence
+
+        # Detect ANY punctuation immediately after [LAUGH], with optional spaces
+        punctuation_after_pattern = re.compile(r"\[LAUGH\]\s*[^\w\s]")
+
+        if punctuation_after_pattern.search(sentence):
+            return sentence
+
+        # Otherwise modify
+        sentence = sentence.replace(" [LAUGH] ", "-[LAUGH]-")
+
+    return sentence
 
 
 def build_placement_prompt(sentence: str, tag: list):
@@ -355,27 +414,44 @@ def build_placement_prompt(sentence: str, tag: list):
 
 
 def insert_emotion_tag(sentences, tags, model, tokenizer):
-
     prompts = [build_placement_prompt(s, t) for s, t in zip(sentences, tags)]
     modified_sentences = sentences[:]
-
     try:
-        inputs = tokenizer(prompts, return_tensors="pt", padding=True, truncation=False).to('cuda')
+        if USE_LLAMA_CPP:
+            batch_decoded = []
+            for prompt in prompts:
+                try:
+                    result = model(
+                        prompt,
+                        max_tokens=10,
+                        temperature=0.0,
+                        stop=[]
+                    )
+                    batch_decoded.append("Answer: " + result["choices"][0]["text"].strip())
+                except Exception as e:
+                    logger.error(f"Exception during placement call: {e}.")
+                    batch_decoded.append("")
+        else:
+            inputs = tokenizer(prompts, return_tensors="pt", padding=True, truncation=False).to('cuda')
 
-        with torch.inference_mode():
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=10,
-                do_sample=False,
-                temperature=0.0,
-                pad_token_id=tokenizer.eos_token_id
-            )
+            with torch.inference_mode():
+                outputs = model.generate(
+                    **inputs,
+                    max_new_tokens=10,
+                    do_sample=False,
+                    temperature=0.0,
+                    pad_token_id=tokenizer.eos_token_id
+                )
 
-        batch_decoded = tokenizer.batch_decode(outputs, skip_special_tokens=True)
-
+            batch_decoded = tokenizer.batch_decode(outputs, skip_special_tokens=True)
         for i, decoded in enumerate(batch_decoded):
             index = extract_index(decoded)
-            index = index if index else "END"
+            if index is None:
+                logger.error(f"Model couldn't find the index in the output \"{decoded}\"\nDefaulting to END.")
+                index = "END"
+            else:
+                is_valid_int = isinstance(index, int) and (0 <= index < len(sentences[i]))
+                index = index if (index == "END" or is_valid_int) else "END"
             modified_sentences[i] = safe_insert(sentences[i], index, tags[i])
 
     except Exception as e:
@@ -395,48 +471,41 @@ def process_detection(paragraph, model, tokenizer):
     sentences = split_sentences(paragraph)
     detections = []
     modified_lines = {}
-    try:
-        for i, s in enumerate(sentences):
-            tags = detect_and_rank_with_context(i, sentences, model, tokenizer)
+
+    indices = list(range(len(sentences)))
+
+    batch_tags = detect_and_rank_batch(indices, sentences, model, tokenizer)
+
+    for i, s in enumerate(sentences):
+        try:
+            tags = batch_tags[i]
             if tags:
                 if tags[0] not in DEFAULT_PRESETS:
                     detections.append((i, s, tags[0]))
                 else:
-                    logger.info(f"Running custom rules on \"{s}\" for {tags[0]}")
-                    modified_lines[i] = process_emotion_rules(s, tags[0])
-                    logger.info(f"Running custom rules on \"{s}\" for {tags[0]}: \"{modified_lines[i]}\"")
+                    logger.debug(f"Running custom rules on \"{s}\" for {tags[0]}")
+                    modified_lines[i] = process_tone_rules(s, tags[0])
+                    logger.debug(f"Running custom rules on \"{s}\" for {tags[0]}: \"{modified_lines[i]}\"")
             else:
-                logger.info(f"No emotion detected for \"{s}\"")
+                logger.debug(f"No emotion detected for \"{s}\"")
                 modified_lines[i] = s
-    except Exception as e:(
-        logger.error(f"Exception: {e}. Skipping detecting emotion on this batch."))
+        except Exception as e:
+            logger.error(f"Exception: {e}. Skipping emotion detection on \"{sentences[i]}\"")
 
     return modified_lines, detections
 
 
-def process_emotion_rules(sentence, tag):
-
+def process_tone_rules(sentence, tag):
     if tag in TONES_SET:
+        if sentence.startswith("\""):
+            return f"\"{tag} {sentence[1:]}"
         return f"{tag} {sentence}"
 
     if tag == '[LAUGH_HARDER]':
         return f"{sentence.strip('.')} {tag}."
 
-    if tag == '[LAUGH]':
-        target = r"\[LAUGH\]"
-
-        # Pattern to detect [LAUGH] at end with optional preceding/trailing punctuation
-        end_pattern = re.compile(rf"[\.\!\?]?\s*{target}[\.\!\?]?\s*$")
-
-        # If [LAUGH] is effectively at the end, don't modify
-        if end_pattern.search(sentence):
-            return sentence
-
-        return sentence.replace("[LAUGH]", "-[LAUGH]-")
-
 
 def process_paragraph(paragraph, model, tokenizer):
-
     modified_lines, detections = process_detection(paragraph, model, tokenizer)
     sentences = []
     tags = []
@@ -446,11 +515,11 @@ def process_paragraph(paragraph, model, tokenizer):
         tags.append(t)
         insert_line_pos.append(i)
 
-    logger.info(f"Running emotion tag placements.")
-    modified_sentences = insert_emotion_tag(sentences, tags, model, tokenizer)
-    logger.info(f"Completed emotion tag placements.")
-    for idx, m_s in enumerate(modified_sentences):
-        modified_lines[insert_line_pos[idx]] = m_s
+    if sentences:
+        modified_sentences = insert_emotion_tag(sentences, tags, model, tokenizer)
+        logger.debug(f"Completed emotion tag placements batch.")
+        for idx, m_s in enumerate(modified_sentences):
+            modified_lines[insert_line_pos[idx]] = m_s
 
     ## Apply post-processing for tag at the end
     emotion_lines = []
@@ -461,7 +530,8 @@ def process_paragraph(paragraph, model, tokenizer):
         emotion_line = re.sub(r"\s+", " ", emotion_line).strip()
         emotion_lines.append(emotion_line)
 
-    return emotion_lines
+    recent_tag_history.clear()
+    return emotion_lines + [" "]
 
 
 def addEmotions(Args, pages, EMOTION_CACHE):
@@ -479,13 +549,12 @@ def addEmotions(Args, pages, EMOTION_CACHE):
         try:
             for paragraph in tqdm(content, desc="Paragraphs", ncols=90, position=1):
                 outputs.extend(process_paragraph(paragraph, model, tokenizer))
-
             if outputs:
-                outputs.insert(0, pages['suggested_title'])
+                outputs.insert(0, page['suggested_title'])
                 EMOTION_CACHE[page["title"]] = outputs
                 updateCache('emotionCache.json', EMOTION_CACHE)
                 progress += 1
-                logger.info(f"Completed emotions for {page['title']}.")
+                logger.info(f"Completed {page['title']}.")
             else:
                 logger.error(f"Something went wrong creating emotions for {page['title']}.")
         except Exception as e:

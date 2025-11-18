@@ -7,3 +7,4 @@ snac
 soundfile
 numpy
 tensorboard
+llama-cpp-python
