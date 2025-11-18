@@ -1,44 +1,42 @@
+import os
 import re
-
+import json
 # ---------------------------------------------------------
-# BASE STRICT AUDIOBOOK WEIGHTS (unchanged)
+# BASE AUDIOBOOK WEIGHTS
 # ---------------------------------------------------------
 
 REQUIRED_MIN_SCORE = {
-    "angry": 1.0,
-    "sarcastic": 1.0,
-    "excited": 1.2,
-    "curious": 1.4,
-    "whisper": 1.3,
-    "cry": 1.2,
-    "scream": 1.4,
-    "sing": 1.4,
+    "angry": 0.55,
+    "sarcastic": 0.55,
+    "excited": 0.60,
+    "curious": 0.60,
+    "whisper": 0.60,
+    "cry": 0.60,
+    "scream": 0.65,
+    "sing": 0.65,
 
-    "sigh": 1.2,
-    "exhale": 1.3,
-    "gasp": 1.0,
-    "gulp": 1.4,
+    "sigh": 0.55,
+    "exhale": 0.55,
+    "gasp": 0.55,
+    "gulp": 0.65,
 
-    "chuckle": 1.2,
-    "giggle": 1.2,
-    "laugh": 1.0,
-    "laugh_harder": 1.2,
-    "snort": 1.4,
+    "chuckle": 0.55,
+    "giggle": 0.55,
+    "laugh": 0.50,
+    "laugh_harder": 0.65,
+    "snort": 0.70,
 }
 
 FALSE_POSITIVE_PENALTY = {
-    # Breath / subtle sounds (still risky, but not crippling)
-    "sigh": 0.35,
-    "exhale": 0.35,
-    "gasp": 0.25,
+    "sigh": 0.12,
+    "exhale": 0.10,
+    "gasp": 0.08,
 
-    # Low-intensity social sounds (was too harsh before)
-    "curious": 0.30,
-    "chuckle": 0.25,
-    "giggle": 0.25,
-    "whisper": 0.20,
+    "curious": 0.10,
+    "chuckle": 0.08,
+    "giggle": 0.08,
+    "whisper": 0.10,
 
-    # Emotional high-confidence tags (keep at zero)
     "angry": 0.0,
     "sarcastic": 0.0,
     "excited": 0.0,
@@ -56,80 +54,138 @@ FALSE_POSITIVE_PENALTY = {
 # ---------------------------------------------------------
 
 STRONG_CUES = {
-    "angry": ["yelled", "shouted", "snapped", "furious", "rage"],
-    "sarcastic": ["yeah right", "sure", "oh wow", "really?", "as if"],
-    "excited": ["amazing!", "incredible!", "can't wait", "wow!"],
-    "curious": ["what's this", "hmm", "tilted his head", "tilted her head"],
-    "whisper": ["whispered", "softly", "under her breath", "under his breath"],
-    "cry": ["tears", "sobbing", "cried", "choking up"],
-    "scream": ["screamed", "shrieked"],
-    "sing": ["sang", "singing"],
+    "angry": ["yell", "shout", "snap", "furious", "rage", "angrily", "mad", "irritated", "annoyed", "fuming"],
+    "sarcastic": ["yeah right", "sure", "oh wow", "really?", "as if", "right...", "mocking", "ironic", "snarky",
+                  "dry tone"],
+    "excited": ["amazing!", "incredible!", "can't wait", "wow!", "so excited", "thrill", "eager", "enthusiast",
+                "pumped", "lively"],
+    "curious": ["what's this", "hmm", "tilted his head", "tilted her head", "wonder", "inquisitive", "question",
+                "puzzle"],
+    "whisper": ["whispered", "softly", "murmur", "hush", "soft voice", "quiet voice", "under her breath"],
+    "cry": ["tear", "cried", "choking up", "crying", "sob", "weep", "whimper", "bawl"],
+    "scream": ["yell", "shout", "shriek"],
+    "sing": ["sang", "singing", "melody", "humming"],
 
-    "sigh": ["sighed"],
-    "exhale": ["exhaled", "let out a breath"],
-    "gasp": ["gasped"],
+    "sigh": ["sigh", "sighed", "weary", "exasperated", "breath out", "long breath"],
+    "exhale": ["exhaled", "let out a breath", "long breath", "breathe out", "breath release"],
+    "gasp": ["gasp", "gasped", "sharp breath", "eyes widened", "whoa", "inhale sharply", "breath hitched",
+             "intake of breath", "swallow hard", "tight throat"],
     "gulp": ["gulped", "swallowed hard"],
 
-    "chuckle": ["chuckled"],
+    "chuckle": ["laugh softly"],
     "giggle": ["giggled"],
-    "laugh": ["laughed"],
-    "laugh_harder": ["laughing harder", "burst out laughing"],
-    "snort": ["snorted"],
+    "laugh": ["laughed", "funny","snicker", "snort"],
+    "laugh_harder": ["burst out laughing", "laughing harder"],
+    "snort": ["snicker"],
 }
 
 MODERATE_CUES = {
     "angry": ["irritated", "annoyed"],
     "sarcastic": ["smirked"],
     "excited": ["excited", "thrilled"],
-    "curious": ["wondered"],
-
+    "curious": ["wondering", "curious"],
     "chuckle": ["amused"],
     "giggle": ["smiled"],
     "laugh": ["funny"],
 }
 
 
+def build_synonym_map():
+    syn_map = {}
+
+    # Strong cues first
+    for tag, cues in STRONG_CUES.items():
+        syn_map.setdefault(tag, [])
+        syn_map[tag].extend(cues)
+
+    # Moderate cues next
+    for tag, cues in MODERATE_CUES.items():
+        syn_map.setdefault(tag, [])
+        syn_map[tag].extend(cues)
+
+    return syn_map
+
+
+SYNONYM_MAP = build_synonym_map()
+
+
 # ---------------------------------------------------------
-# SCORING COMPONENTS
+# SCORING LEXICAL
 # ---------------------------------------------------------
 
-def score_lexical(tag, text):
+
+def score_lexical(tag, text, generated_cues=[]):
+    if generated_cues is None:
+        generated_cues = []
     t = text.lower()
+    tag = tag.lower()
+
+    # --------------------------------------------------------
+    # 1. Morphological match: laugh/laughs/laughed/laughing
+    # --------------------------------------------------------
+    morph_tag = r"\b" + re.escape(tag) + r"(s|ed|ing)?\b"
+    if re.search(morph_tag, t):
+        return 1.0
+
+    # --------------------------------------------------------
+    # 2. STRONG CUES (priority)
+    # --------------------------------------------------------
     for cue in STRONG_CUES.get(tag, []):
-        if cue in t:
+        cue_l = cue.lower()
+
+        # direct phrase match
+        if cue_l in t:
             return 2.0
+
+        # morph match on first word
+        first = cue_l.split()[0]
+        morph = r"\b" + re.escape(first) + r"(s|ed|ing)?\b"
+        if re.search(morph, t):
+            return 2.0
+
+    # --------------------------------------------------------
+    # 3. MODERATE CUES
+    # --------------------------------------------------------
     for cue in MODERATE_CUES.get(tag, []):
-        if cue in t:
+        cue_l = cue.lower()
+
+        if cue_l in t:
             return 1.0
-    return 0.0
 
+        first = cue_l.split()[0]
+        morph = r"\b" + re.escape(first) + r"(s|ed|ing)?\b"
+        if re.search(morph, t):
+            return 1.0
 
-def score_punctuation(text):
-    score = 0.0
-    if "!" in text:
-        score += 0.2
-    if "?!" in text:
-        score += 0.3
-    if "..." in text:
-        score += 0.2
-    if "—" in text:
-        score += 0.2
-    return min(score, 0.3)
+    # --------------------------------------------------------
+    # 4. AUTO SYNONYMS (from cue dictionaries)
+    # --------------------------------------------------------
+    for syn in SYNONYM_MAP.get(tag, []):
+        syn_l = syn.lower()
 
+        # direct check
+        if syn_l in t:
+            return 1.0
 
-def score_context(tag, prev_text, next_text):
-    prev = prev_text.lower()
-    nxt = next_text.lower()
+        # morph check for synonyms
+        first = syn_l.split()[0]
+        morph = r"\b" + re.escape(first) + r"(s|ed|ing)?\b"
+        if re.search(morph, t):
+            return 1.0
 
-    for cue in STRONG_CUES.get(tag, []):
-        if cue in prev or cue in nxt:
-            return 0.3
+    # --------------------------------------------------------
+    # 5. GENERATED CUES (JSON custom learned cues)
+    # --------------------------------------------------------
+    for entry in generated_cues.get(tag, []):
+        if entry["cue"].lower() in t:
+            return entry["weight"]
+    for cues in generated_cues.get(tag, []):
+        if cues['cue'] in t:
+            return cues['weight']
 
-    if tag == "angry" and any(x in nxt for x in ["calmly", "softly"]):
-        return -0.5
-    if tag == "sigh" and "laughed" in nxt:
-        return -0.5
-
+    # --------------------------------------------------------
+    # 6. NO MATCH
+    # --------------------------------------------------------
     return 0.0
 
 # ---------------------------------------------------------
@@ -137,7 +193,7 @@ def score_context(tag, prev_text, next_text):
 # ---------------------------------------------------------
 
 
-def apply_genre_rules(tag, text, prev_text, next_text, base_score, genre):
+def apply_genre_rules(tag, text, base_score, genre):
     t = text.lower()
 
     # -----------------------
@@ -152,23 +208,23 @@ def apply_genre_rules(tag, text, prev_text, next_text, base_score, genre):
     if genre == "YA":
         # sarcasm boost for banter
         if tag == "sarcastic" and any(x in t for x in ["right.", "sure.", "wow", "okay"]):
-            base_score += 0.4
+            base_score += 0.05
 
         # suppress sigh/exhale unless explicit
-        if tag in ["sigh", "exhale"] and "sigh" not in t and "exhal" not in t:
-            base_score -= 0.5
+        if tag in ["sigh", "exhale"] and "sigh" not in t and "exhale" not in t:
+            base_score -= 0.06
 
         # boost curious for inquisitive questions
         if tag == "curious" and "?" in t:
-            base_score += 0.3
+            base_score += 0.05
 
         # shy/awkward tension
         if tag in ["chuckle", "giggle"] and any(x in t for x in ["you're ridiculous", "shut up", "don't judge"]):
-            base_score += 0.3
+            base_score += 0.06
 
         # avoid gasp unless explicit
         if tag == "gasp" and "gasp" not in t:
-            base_score -= 0.4
+            base_score -= 0.06
 
         return base_score
 
@@ -178,19 +234,23 @@ def apply_genre_rules(tag, text, prev_text, next_text, base_score, genre):
     if genre == "fantasy":
         # elevate gasp for magical or shocking events
         if tag == "gasp" and any(x in t for x in ["magic", "portal", "ancient", "creature", "power"]):
-            base_score += 0.4
+            base_score += 0.06
 
         # suppress chuckle/giggle (not common in epic fantasy)
         if tag in ["chuckle", "giggle"]:
-            base_score -= 0.4
+            base_score -= 0.05
 
         # boost whisper for conspiratorial or mystical tones
         if tag == "whisper" and any(x in t for x in ["spell", "ritual", "prophecy", "cloak"]):
-            base_score += 0.4
+            base_score += 0.06
 
         # epic drama → angry/excited more common
         if tag in ["angry", "excited"] and "!" in t:
-            base_score += 0.2
+            base_score += 0.05
+
+        # boost curious for inquisitive questions
+        if tag == "curious" and "?" in t:
+            base_score += 0.04
 
         return base_score
 
@@ -200,16 +260,15 @@ def apply_genre_rules(tag, text, prev_text, next_text, base_score, genre):
     if genre == "drama":
         # boost sigh & exhale slightly (drama uses breathiness)
         if tag in ["sigh", "exhale"]:
-            base_score += 0.3
+            base_score += 0.06
 
         # boost cry if emotional phrasing
         if tag == "cry" and any(x in t for x in ["please", "don't", "why", "can't"]):
-            base_score += 0.4
+            base_score += 0.08
 
         # reduce laugh-family unless explicit
-        if tag in ["chuckle", "giggle", "laugh"]:
-            if "laugh" not in t:
-                base_score -= 0.4
+        if tag in ["chuckle", "giggle", "laugh"] and "laugh" not in t:
+            base_score -= 0.06
 
         return base_score
 
@@ -220,38 +279,41 @@ def apply_genre_rules(tag, text, prev_text, next_text, base_score, genre):
 # ---------------------------------------------------------
 
 
-def strict_rerank(text, prev_text, next_text, candidate_tags, genre="normal", top_k=2):
+def rerank(text, candidate_tags, genre="normal", top_k=2):
+
+    generated_cues = []
+    if os.path.isfile('emotion_cue_weights.json'):
+        with open('emotion_cue_weights.json') as f:
+            generated_cues = json.load(f)
+
     results = []
-    score = None
-    for tag in candidate_tags:
-        les = score_lexical(tag, text)
-        pps = score_punctuation(text)
-        ccs = score_context(tag, prev_text, next_text)
+    LLM_prob = [0.7, 0.3, 0.2]
+    for i, tag in enumerate(candidate_tags):
+        LLM_score = LLM_prob[i]
+        les = score_lexical(tag, text, generated_cues)
         fpp = FALSE_POSITIVE_PENALTY[tag]
         required = REQUIRED_MIN_SCORE[tag]
 
-        base_score = (les + pps + ccs) - fpp
+        base_score = 0.7 * LLM_score + 0.3 * les - fpp
 
         # apply genre rules
-        final_score = apply_genre_rules(tag, text, prev_text, next_text, base_score, genre)
+        final_score = apply_genre_rules(tag, text, base_score, genre)
 
-        score = final_score
         if final_score >= required:
             results.append((tag, final_score))
 
     results.sort(key=lambda x: x[1], reverse=True)
-    return [tag.upper() for tag, _ in results[:top_k]], round(score, 2)
+    results = results[:top_k]
+    return [f"[{tag.upper()}]" for tag, _ in results], [f"{round(score,2)}/{REQUIRED_MIN_SCORE[tag]}" for tag, score in results]
+
 
 # ---------------------------------------------------------
 # Example
 # ---------------------------------------------------------
 
-
 if __name__ == "__main__":
-    prev_s = "He stared into the flickering torchlight."
-    curr_s = "She whispered the old prophecy under her breath."
-    next_s = "The cavern trembled softly."
+    curr_s = "I usually just kick the main door, you know.\" He laughs."
 
-    model_tags = ["EXCITED", "CURIOUS", "WHISPER"]
+    model_tags = ["LAUGH"]
 
-    print(strict_rerank(curr_s, prev_s, next_s, [t.lower() for t in model_tags], genre="fantasy"))
+    print(rerank(curr_s, [t.lower() for t in model_tags], genre="fantasy"))
