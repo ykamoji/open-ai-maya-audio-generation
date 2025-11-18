@@ -54,29 +54,64 @@ FALSE_POSITIVE_PENALTY = {
 # ---------------------------------------------------------
 
 STRONG_CUES = {
-    "angry": ["yell", "shout", "snap", "furious", "rage", "angrily", "mad", "irritated", "annoyed", "fuming"],
-    "sarcastic": ["yeah right", "sure", "oh wow", "really?", "as if", "right...", "mocking", "ironic", "snarky",
-                  "dry tone"],
-    "excited": ["amazing!", "incredible!", "can't wait", "wow!", "so excited", "thrill", "eager", "enthusiast",
-                "pumped", "lively"],
-    "curious": ["what's this", "hmm", "tilted his head", "tilted her head", "wonder", "inquisitive", "question",
-                "puzzle"],
-    "whisper": ["whispered", "softly", "murmur", "hush", "soft voice", "quiet voice", "under her breath"],
-    "cry": ["tear", "cried", "choking up", "crying", "sob", "weep", "whimper", "bawl"],
-    "scream": ["yell", "shout", "shriek"],
-    "sing": ["sang", "singing", "melody", "humming"],
-
-    "sigh": ["sigh", "sighed", "weary", "exasperated", "breath out", "long breath"],
-    "exhale": ["exhaled", "let out a breath", "long breath", "breathe out", "breath release"],
-    "gasp": ["gasp", "gasped", "sharp breath", "eyes widened", "whoa", "inhale sharply", "breath hitched",
-             "intake of breath", "swallow hard", "tight throat"],
-    "gulp": ["gulped", "swallowed hard"],
-
-    "chuckle": ["laugh softly"],
-    "giggle": ["giggled"],
-    "laugh": ["laughed", "funny","snicker", "snort"],
-    "laugh_harder": ["burst out laughing", "laughing harder"],
-    "snort": ["snicker"],
+    "angry": [
+        "yell", "shout", "yelled", "shouted", "snap", "furious", "rage", "angrily", "mad", "irritated", "annoyed",
+        "fuming", "gritted his teeth", "snarl", "glared", "eyes burned", "stomped", "slammed", "shook with anger"
+    ],
+    "sarcastic": [
+        "yeah right", "sure", "oh wow", "really?", "as if", "right...", "mocking", "ironic", "snarky",
+        "dry tone", "slow clap", "mockingly", "dry tone", "smirked", "said with a smirk", "said flatly",
+        "deadpan"
+    ],
+    "excited": [
+        "amazing!", "incredible!", "can't wait", "wow!", "so excited", "thrill", "eager", "enthusiast",
+        "pumped", "lively", "eyes lit up", "leaned forward eagerly"
+    ],
+    "curious": [
+        "what's this", "hmm", "tilted his head", "tilted her head", "wonder", "inquisitive", "question",
+        "puzzle", "brows lifted", "eyes narrowed in thought", "studied him", "peered", "examined", "questioned"
+    ],
+    "whisper": [
+        "whispered", "softly", "murmur", "hush", "soft voice", "quiet voice", "under her breath", "under her breath",
+        "barely audible", "hushed voice", "quiet tone"
+    ],
+    "cry": [
+        "tear", "cried", "choking up", "crying", "sob", "weep", "whimper", "bawl"
+    ],
+    "scream": [
+        "yell", "shout", "shriek"
+    ],
+    "sing": [
+        "sang", "singing", "melody", "humming"
+    ],
+    "sigh": [
+        "sigh", "sighed", "weary", "exasperated", "breath out", "long breath"
+    ],
+    "exhale": [
+        "exhaled", "let out a breath", "long breath", "breathe out", "breath release"
+    ],
+    "gasp": [
+        "gasp", "gasped", "sharp breath", "eyes widened", "whoa", "inhale sharply", "breath hitched",
+        "intake of breath", "swallow hard", "tight throat"
+    ],
+    "gulp": [
+        "gulped", "swallowed hard"
+    ],
+    "chuckle": [
+        "laugh softly"
+    ],
+    "giggle": [
+        "giggled"
+    ],
+    "laugh": [
+        "laughed", "funny", "snicker", "snort"
+    ],
+    "laugh_harder": [
+        "burst out laughing", "laughing harder", "couldn't hold back laughter"
+    ],
+    "snort": [
+        "snicker"
+    ],
 }
 
 MODERATE_CUES = {
@@ -114,9 +149,7 @@ SYNONYM_MAP = build_synonym_map()
 # ---------------------------------------------------------
 
 
-def score_lexical(tag, text, generated_cues=[]):
-    if generated_cues is None:
-        generated_cues = []
+def score_lexical(tag, text):
     t = text.lower()
     tag = tag.lower()
 
@@ -174,17 +207,7 @@ def score_lexical(tag, text, generated_cues=[]):
             return 1.0
 
     # --------------------------------------------------------
-    # 5. GENERATED CUES (JSON custom learned cues)
-    # --------------------------------------------------------
-    for entry in generated_cues.get(tag, []):
-        if entry["cue"].lower() in t:
-            return entry["weight"]
-    for cues in generated_cues.get(tag, []):
-        if cues['cue'] in t:
-            return cues['weight']
-
-    # --------------------------------------------------------
-    # 6. NO MATCH
+    # 5. NO MATCH
     # --------------------------------------------------------
     return 0.0
 
@@ -281,16 +304,11 @@ def apply_genre_rules(tag, text, base_score, genre):
 
 def rerank(text, candidate_tags, genre="normal", top_k=2):
 
-    generated_cues = []
-    if os.path.isfile('emotion_cue_weights.json'):
-        with open('emotion_cue_weights.json') as f:
-            generated_cues = json.load(f)
-
     results = []
     LLM_prob = [0.7, 0.3, 0.2]
     for i, tag in enumerate(candidate_tags):
         LLM_score = LLM_prob[i]
-        les = score_lexical(tag, text, generated_cues)
+        les = score_lexical(tag, text)
         fpp = FALSE_POSITIVE_PENALTY[tag]
         required = REQUIRED_MIN_SCORE[tag]
 
@@ -312,8 +330,8 @@ def rerank(text, candidate_tags, genre="normal", top_k=2):
 # ---------------------------------------------------------
 
 if __name__ == "__main__":
-    curr_s = "I usually just kick the main door, you know.\" He laughs."
+    curr_s = "As I approached the gate leading to the coliseum field, the roar of the crowd grew louder with every step."
 
-    model_tags = ["LAUGH"]
+    model_tags = ['EXCITED', 'ANGRY']
 
     print(rerank(curr_s, [t.lower() for t in model_tags], genre="fantasy"))
