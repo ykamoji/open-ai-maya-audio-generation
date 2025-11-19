@@ -154,6 +154,8 @@ def convert(Args, content, title, outputPath):
 
     chunks = createChunks(content)
 
+    torch.manual_seed(0)
+
     if GPUCount > 0:
         print("Running in GPU env.")
         multiGPU(chunks, description, outputPath, title, MODEL_PATH)
