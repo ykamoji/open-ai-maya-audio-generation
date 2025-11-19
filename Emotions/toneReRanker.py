@@ -1,6 +1,6 @@
-import os
 import re
-import json
+import math
+
 # ---------------------------------------------------------
 # BASE AUDIOBOOK WEIGHTS
 # ---------------------------------------------------------
@@ -73,75 +73,221 @@ STRONG_CUES = {
     ],
     "whisper": [
         "whispered", "softly", "murmur", "hush", "soft voice", "quiet voice", "under her breath", "under her breath",
-        "barely audible", "hushed voice", "quiet tone"
+        "barely audible", "hushed voice"
     ],
     "cry": [
-        "tear", "cried", "choking up", "crying", "sob", "weep", "whimper", "bawl"
+        "tears", "cried", "choking up", "crying", "sobs", "weep", "whimper", "bawl",
+        "tears", "sobbing", "choking up", "voice broke", "weeping", "sniffling", "tear-streaked", "sobbed"
     ],
     "scream": [
-        "yell", "shout", "shriek"
+        "yell", "shout", "shriek", "screamed", "shrieked", "yelled!", "shouted!", "howled",
+        "voice cracked from shouting", "let out a scream"
     ],
     "sing": [
-        "sang", "singing", "melody", "humming"
+        "sang", "singing", "melody", "humming", "tune", "softly singing"
     ],
     "sigh": [
-        "sigh", "sighed", "weary", "exasperated", "breath out", "long breath"
+        "sigh", "sighed", "weary", "exasperated", "breath out", "long breath", "long sigh", "exasperated",
+        "let out a sigh", "breath escaped", "shoulders slumped"
     ],
     "exhale": [
-        "exhaled", "let out a breath", "long breath", "breathe out", "breath release"
+        "exhaled", "let out a breath", "released a breath", "breath rushed out", "long breath"
     ],
     "gasp": [
         "gasp", "gasped", "sharp breath", "eyes widened", "whoa", "inhale sharply", "breath hitched",
-        "intake of breath", "swallow hard", "tight throat"
+        "intake of breath", "swallow hard", "tight throat", "startled"
     ],
     "gulp": [
-        "gulped", "swallowed hard"
+        "gulped", "swallowed hard", "tight throat", "dry swallow"
     ],
     "chuckle": [
-        "laugh softly"
+        "laughs softly", "chuckled", "small laugh", "amused sound", "low laugh"
     ],
     "giggle": [
         "giggled"
     ],
     "laugh": [
-        "laughed", "funny", "snicker", "snort"
+        "laughed", "funny", "burst into laughter", "couldn't stop laughing", "cracked up", "laughed out loud"
     ],
     "laugh_harder": [
-        "burst out laughing", "laughing harder", "couldn't hold back laughter"
+        "burst out laughing", "laughing harder", "doubling over in laughter",
+        "roared with laughter" "couldn't hold back laughter"
     ],
     "snort": [
-        "snicker"
+        "snicker",
     ],
 }
 
 MODERATE_CUES = {
-    "angry": ["irritated", "annoyed"],
-    "sarcastic": ["smirked"],
-    "excited": ["excited", "thrilled"],
-    "curious": ["wondering", "curious"],
-    "chuckle": ["amused"],
-    "giggle": ["smiled"],
-    "laugh": ["funny"],
+    "angry": [
+         "annoyed", "irritated", "tense voice", "short tone", "frustrated", "brows furrowed", "sharp tone"
+    ],
+    "sarcastic": [
+        "smirked", "dryly", "said in a flat tone",  "under her breath sarcastically"
+    ],
+    "excited": [
+        "thrilled", "eager", "anticipation", "buzzing", "growing louder", "rising energy", "building excitement",
+        "leaned forward", "eyes sparkled", "loud"
+    ],
+    "curious": [
+        "curious", "wondering", "leaned in slightly", "thoughtful tone", "studying", "intrigued"
+    ],
+    "whisper": [
+        "quietly", "low voice", "soft tone", "barely said"
+    ],
+    "cry": [
+        "voice wavered", "eyes watered", "emotional", "on the verge of tears"
+    ],
+    "scream": [
+        "raised voice", "shouting tone", "high-pitched voice"
+    ],
+    "sing": [
+        "light humming", "soft tune", "melodic voice"
+    ],
+
+    "sigh": [
+        "tired tone", "heavy breath", "felt drained"
+    ],
+    "exhale": [
+        "breath escaped", "slow breath", "steadying breath"
+    ],
+    "gasp": [
+        "breath caught", "sharp inhale", "surprised"
+    ],
+    "gulp": [
+        "nervous swallow", "dry mouth"
+    ],
+    "chuckle": [
+        "amused", "smiled lightly"
+    ],
+    "giggle": [
+        "smiled", "light laugh"
+    ],
+
+    "laugh": [
+        "funny", "soft laugh", "amused tone"
+    ],
+    "laugh_harder": [
+        "laughing more", "couldn't hold back laughter"
+    ],
+    "snort": [
+        "amused breath"
+    ]
 }
 
+WEAK_CUES = {
+    "excited": [
+        "energy", "buzzing", "rumble", "roar", "steps quickened", "anticipation built",
+        "air vibrated", "waves of sound", "movement all around",
+        "lights brightened", "hustle of people", "energy rising",
+        "felt alive", "heart picked up", "quickened pace",
+        "could feel it in the air", "electric atmosphere"
+        "quick movements", "brisk pace", "bright surroundings",
+        "momentum grew", "felt the pull forward", "alive with motion"
+    ],
 
-def build_synonym_map():
-    syn_map = {}
+    "curious": [
+        "studied", "peered", "tilted", "leaned in", "observed",
+        "examined", "looked closer", "glanced around", "lingered gaze",
+        "scanned the area", "brows raised slightly", "head tilted",
+        "traced the lines", "paused to look", "eyes followed",
+        "inspect", "unknown sight", "caught attention",
+        "shifted focus", "drawn toward"
+    ],
 
-    # Strong cues first
-    for tag, cues in STRONG_CUES.items():
-        syn_map.setdefault(tag, [])
-        syn_map[tag].extend(cues)
+    "sigh": [
+        "long moment", "heavy silence", "quiet settled",
+        "weight of the", "took a moment", "rested her shoulders",
+        "rested his shoulders", "slowed to a stop", "stillness hung",
+        "lingering quiet", "moment stretched", "breath softened",
+        "sank slightly", "lowered posture", "quiet pause",
+        "time seemed to slow", "let things settle"
+    ],
 
-    # Moderate cues next
-    for tag, cues in MODERATE_CUES.items():
-        syn_map.setdefault(tag, [])
-        syn_map[tag].extend(cues)
+    "exhale": [
+        "breath escaped", "release of air", "tension leaving",
+        "slow air", "steadying himself", "steadying herself",
+        "loosening grip", "relaxing slightly", "chest lowered",
+        "air drifted", "in the stillness", "dropped his shoulders",
+        "dropped her shoulders", "breath slipped out"
+    ],
 
-    return syn_map
+    "gasp": [
+        "froze", "went still", "eyes wide", "eyes widened",
+        "heart skipped", "shock ran through", "stopped short",
+        "pulled back slightly", "stiffened", "halted mid-step",
+        "sudden silence", "everything stopped", "sharp movement",
+        "jerked back", "stumbled for a moment"
+    ],
 
+    "gulp": [
+        "swallowed", "tight throat", "dry throat", "nervous stillness",
+        "rigid posture", "shifted nervously", "unsteady hands",
+        "backed up a step", "looked uneasy", "hesitant pause",
+        "mouth tightened", "lips pressed together", "averted eyes",
+        "leaned away slightly"
+    ],
 
-SYNONYM_MAP = build_synonym_map()
+    "angry": [
+        "jaw tightened", "tension rose", "sharp look", "muscles tensed",
+        "brows narrowed", "steps heavy", "slammed down his foot",
+        "shoulders locked", "hands tightened", "eyes hardened",
+        "tone dropped", "movement stiff", "cold stare",
+        "clenched posture", "held firm", "unblinking glare"
+    ],
+
+    "whisper": [
+        "leaned close", "brought face closer", "steps softened",
+        "moved quietly", "softened posture", "ducked head slightly",
+        "held breath for a moment", "lowered voice area",
+        "dimly lit space", "shadows stretched long"
+    ],
+
+    "cry": [
+        "voice thin", "words faltered", "breathing uneven",
+        "looked down at the ground", "held her arm tightly",
+        "held his arm tightly", "wavered", "trembled slightly",
+        "blinked a few times", "blinked rapidly", "voice nearly broke",
+        "edges of voice softened", "stillness of the moment"
+    ],
+
+    "scream": [
+        "rising panic", "frantic movement", "backed away quickly",
+        "scrambled", "chaos erupted",
+        "crack of tension",
+        "surge of adrenaline", "disturbance ahead"
+    ],
+
+    "laugh": [
+        "loosening tension", "face brightened", "smile forming",
+        "a bit lighter", "moment eased", "soft warmth",
+        "playful energy", "air shifted brighter"
+    ],
+
+    "chuckle": [
+        "small smile", "lips curled slightly", "eyes softened",
+        "tiny smirk", "easy movement", "relaxed a little"
+    ],
+
+    "giggle": [
+        "lightness in the air", "small bounce in her step",
+        "tiny grin", "playful eyes"
+    ],
+
+    "laugh_harder": [
+        "bending forward slightly", "clutching stomach lightly",
+        "face lighting up strongly"
+    ],
+
+    "snort": [
+        "short breath out", "huffed lightly", "quick puff of air"
+    ],
+
+    "sing": [
+        "rhythmic movement", "soft humming rhythm",
+        "gentle cadence", "flowing tone in the air"
+    ],
+}
 
 
 # ---------------------------------------------------------
@@ -149,67 +295,63 @@ SYNONYM_MAP = build_synonym_map()
 # ---------------------------------------------------------
 
 
-def score_lexical(tag, text):
+def  score_lexical(tag, text):
     t = text.lower()
     tag = tag.lower()
+
+    score = 0.0
 
     # --------------------------------------------------------
     # 1. Morphological match: laugh/laughs/laughed/laughing
     # --------------------------------------------------------
     morph_tag = r"\b" + re.escape(tag) + r"(s|ed|ing)?\b"
     if re.search(morph_tag, t):
-        return 1.0
+        score += 2.0
 
     # --------------------------------------------------------
     # 2. STRONG CUES (priority)
     # --------------------------------------------------------
     for cue in STRONG_CUES.get(tag, []):
         cue_l = cue.lower()
-
-        # direct phrase match
         if cue_l in t:
-            return 2.0
-
-        # morph match on first word
-        first = cue_l.split()[0]
-        morph = r"\b" + re.escape(first) + r"(s|ed|ing)?\b"
-        if re.search(morph, t):
-            return 2.0
+            score += 2.0
 
     # --------------------------------------------------------
     # 3. MODERATE CUES
     # --------------------------------------------------------
     for cue in MODERATE_CUES.get(tag, []):
         cue_l = cue.lower()
-
         if cue_l in t:
-            return 1.0
-
-        first = cue_l.split()[0]
-        morph = r"\b" + re.escape(first) + r"(s|ed|ing)?\b"
-        if re.search(morph, t):
-            return 1.0
+            score += 1.0
 
     # --------------------------------------------------------
-    # 4. AUTO SYNONYMS (from cue dictionaries)
+    # 4. Week CUES
     # --------------------------------------------------------
-    for syn in SYNONYM_MAP.get(tag, []):
-        syn_l = syn.lower()
-
-        # direct check
-        if syn_l in t:
-            return 1.0
-
-        # morph check for synonyms
-        first = syn_l.split()[0]
-        morph = r"\b" + re.escape(first) + r"(s|ed|ing)?\b"
-        if re.search(morph, t):
-            return 1.0
+    for cue in WEAK_CUES.get(tag, []):
+        cue_l = cue.lower()
+        if cue_l in t:
+            score += 0.5
 
     # --------------------------------------------------------
     # 5. NO MATCH
     # --------------------------------------------------------
-    return 0.0
+    return score
+
+
+def lexical_candidate_tags(text) :
+    candidates = []
+    for tag in REQUIRED_MIN_SCORE.keys():  # all known tags
+        raw_lex = score_lexical(tag, text)
+        if raw_lex >= 1.5:
+            candidates.append(tag)
+    return candidates
+
+
+def normalize_lex_score(score):
+    if score <= 0.0:
+        return 0.0
+    capped = min(score, 2.5)
+    return capped / 2.5
 
 # ---------------------------------------------------------
 # GENRE ADD-ON RULES
@@ -297,32 +439,41 @@ def apply_genre_rules(tag, text, base_score, genre):
 
     return base_score
 
+
 # ---------------------------------------------------------
 # FINAL RERANK FUNCTION WITH GENRE
 # ---------------------------------------------------------
 
 
 def rerank(text, candidate_tags, genre="normal", top_k=2):
-
     results = []
-    LLM_prob = [0.7, 0.3, 0.2]
+    LLM_prob = [0.95, 0.45, 0.1]
+    lex_candidates = lexical_candidate_tags(text)
+
+    for lex_cand in lex_candidates:
+        if lex_cand not in candidate_tags:
+            candidate_tags.append(lex_cand)
+
     for i, tag in enumerate(candidate_tags):
         LLM_score = LLM_prob[i]
         les = score_lexical(tag, text)
+        if les < 1.5:
+            les = 0.0
         fpp = FALSE_POSITIVE_PENALTY[tag]
         required = REQUIRED_MIN_SCORE[tag]
 
-        base_score = 0.7 * LLM_score + 0.3 * les - fpp
+        base_score = 0.6 * LLM_score + 0.4 * les - fpp
 
         # apply genre rules
-        final_score = apply_genre_rules(tag, text, base_score, genre)
+        final_score = round(apply_genre_rules(tag, text, base_score, genre), 2)
 
         if final_score >= required:
             results.append((tag, final_score))
 
     results.sort(key=lambda x: x[1], reverse=True)
     results = results[:top_k]
-    return [f"[{tag.upper()}]" for tag, _ in results], [f"{round(score,2)}/{REQUIRED_MIN_SCORE[tag]}" for tag, score in results]
+    return [f"[{tag.upper()}]" for tag, _ in results], [f"{round(score, 2)}/{REQUIRED_MIN_SCORE[tag]}" for tag, score in
+                                                        results]
 
 
 # ---------------------------------------------------------
@@ -332,6 +483,6 @@ def rerank(text, candidate_tags, genre="normal", top_k=2):
 if __name__ == "__main__":
     curr_s = "As I approached the gate leading to the coliseum field, the roar of the crowd grew louder with every step."
 
-    model_tags = ['EXCITED', 'ANGRY']
+    model_tags = ['SIGH']
 
     print(rerank(curr_s, [t.lower() for t in model_tags], genre="fantasy"))
