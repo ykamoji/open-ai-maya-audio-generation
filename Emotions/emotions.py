@@ -26,7 +26,7 @@ UNKNOWN_STATS_PATH = "unknown_stats.csv"
 unknown_tag_log = Counter()
 
 TONES = [
-    "[ANGRY]", "[EXCITED]", "[SARCASTIC]", "[CURIOUS]", "[SING]"
+    "[ANGRY]", "[EXCITED]", "[SARCASTIC]", "[CURIOUS]", "[SING]", "[APPALLED]", "[MISCHIEVOUS]", "[DISAPPOINTED]"
 ]
 
 SOUNDS = [
@@ -331,33 +331,6 @@ def shift_emotion_inside(sentence):
     if m:
         before, punctuation, tag = m.groups()
         sentence = f"{before} {tag}{punctuation}"
-
-    if '[LAUGH]' in sentence:
-
-        # Detect [LAUGH] at the beginning
-        begin_pattern = re.compile(r"^\s*[\.\!\?]?\s*\[LAUGH\]")
-
-        # Detect [LAUGH] at end
-        end_pattern = re.compile(r"\[LAUGH\][\.\!\?]?\s*$")
-
-        # If at beginning or end → do nothing
-        if begin_pattern.search(sentence) or end_pattern.search(sentence):
-            return sentence
-
-        # Detect ANY punctuation before [LAUGH], with optional spaces
-        punctuation_before_pattern = re.compile(r"[^\w\s]\s*\[LAUGH\]")
-
-        if punctuation_before_pattern.search(sentence):
-            return sentence
-
-        # Detect ANY punctuation immediately after [LAUGH], with optional spaces
-        punctuation_after_pattern = re.compile(r"\[LAUGH\]\s*[^\w\s]")
-
-        if punctuation_after_pattern.search(sentence):
-            return sentence
-
-        # Otherwise modify
-        sentence = sentence.replace(" [LAUGH] ", "-[LAUGH]-")
 
     return sentence
 

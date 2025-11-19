@@ -15,6 +15,10 @@ REQUIRED_MIN_SCORE = {
     "scream": 0.65,
     "sing": 0.65,
 
+    "appalled": 0.60,
+    "mischievous": 0.55,
+    "disappointed": 0.55,
+
     "sigh": 0.55,
     "exhale": 0.55,
     "gasp": 0.55,
@@ -24,13 +28,17 @@ REQUIRED_MIN_SCORE = {
     "giggle": 0.55,
     "laugh": 0.50,
     "laugh_harder": 0.65,
-    "snort": 0.70,
+    "snort": 0.70
 }
 
 FALSE_POSITIVE_PENALTY = {
     "sigh": 0.12,
     "exhale": 0.10,
     "gasp": 0.08,
+
+    "appalled": 0.10,
+    "mischievous": 0.12,
+    "disappointed": 0.08,
 
     "curious": 0.10,
     "chuckle": 0.08,
@@ -116,6 +124,18 @@ STRONG_CUES = {
     "snort": [
         "snicker",
     ],
+    "appalled": [
+        "appalled", "disgusted", "horrified", "recoiled",
+        "face twisted in disgust", "staggered back", "what on earth"
+    ],
+    "mischievous": [
+        "mischievous grin", "glint in his eye", "glint in her eye",
+        "smirked", "playful smirk", "grinned slyly", "scheming"
+    ],
+    "disappointed": [
+        "disappointed", "let down", "crestfallen", "slumped",
+        "face fell", "voice fell", "eyes dimmed", "deep sigh"
+    ],
 }
 
 MODERATE_CUES = {
@@ -172,7 +192,18 @@ MODERATE_CUES = {
     ],
     "snort": [
         "amused breath"
-    ]
+    ],
+    "appalled": [
+        "pulled back slightly", "stepped away", "brows lifted sharply"
+    ],
+    "mischievous": [
+        "smirked lightly", "eyes sparkled with intent",
+        "playful look", "tilted head with a grin"
+    ],
+    "disappointed": [
+        "looked down", "quiet tone", "shoulders lowered",
+        "tone softened", "weak smile"
+    ],
 }
 
 WEAK_CUES = {
@@ -287,6 +318,32 @@ WEAK_CUES = {
         "rhythmic movement", "soft humming rhythm",
         "gentle cadence", "flowing tone in the air"
     ],
+    "appalled": [
+        "froze in place", "stopped mid-step", "expression shifted", "leaned back slightly", "hesitated visibly",
+        "pulled her hand back", "pulled his hand back", "drew back a little", "took a half step back",
+        "went quiet suddenly", "room fell still", "eyes darted away", "stiffened for a moment",
+        "blinked twice", "blinked rapidly", "mouth opened slightly", "jaw slackened for a moment",
+        "air seemed to thin", "movement halted briefly", "went rigid", "grip loosened slightly",
+        "voice caught for a second", "breath faltered", "tension rippled through",
+    ],
+    "mischievous": [
+        "hint of a grin", "tiny grin forming", "glanced sideways", "glance to the side",
+        "eyes narrowed playfully", "eyes sparkled briefly", "small smirk", "corner of mouth lifted",
+        "shifted weight lightly", "rocked on heels", "tilted her head with interest", "tilted his head with interest",
+        "hands clasped behind back", "hands tucked behind", "stepped closer with ease", "leaned in slightly",
+        "felt the moment lighten", "air grew lighter", "whisper of amusement", "playful glint",
+        "tried to hide a smile", "nearly broke into a smile", "pretended not to notice", "looked far too casual",
+    ],
+    "disappointed": [
+         "quiet for a moment", "voice low", "moment stretched out", "air grew still",
+        "looked down briefly", "glanced at the floor", "slowed his step", "slowed her step",
+        "shoulders dipped slightly", "posture loosened", "let the silence linger", "fell quiet again",
+        "breath softened", "voice softened", "held her arm lightly", "held his arm lightly",
+        "stared at the ground", "stared past him", "lowered his gaze", "lowered her gaze",
+        "hands relaxed at sides", "hands dropped slightly",
+        "exhaled without noticing", "paused mid-sentence",
+        "tone faded briefly", "words trailed off",
+    ],
 }
 
 
@@ -390,6 +447,9 @@ def apply_genre_rules(tag, text, base_score, genre):
         # avoid gasp unless explicit
         if tag == "gasp" and "gasp" not in t:
             base_score -= 0.06
+
+        if tag == "mischievous":
+            base_score += 0.04
 
         return base_score
 
