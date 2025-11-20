@@ -1,6 +1,5 @@
 import torch
 import re
-from llama_cpp import Llama
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 USE_LLAMA_CPP = True
@@ -18,6 +17,7 @@ sentence_regex = re.compile(
 def getModelAndTokenizer(MODEL_PATH, quantize, platform):
 
     if USE_LLAMA_CPP:
+        from llama_cpp import Llama
         llm = Llama(
             model_path=MODEL_PATH,
             n_gpu_layers=-1,
