@@ -2,7 +2,7 @@ import torch
 import re
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-USE_LLAMA_CPP = True
+USE_LLAMA_CPP = False
 
 sentence_regex = re.compile(
     r'''(?x)

@@ -42,7 +42,7 @@ TTS_TAGS_SET = set(TTS_TAGS)
 
 TTS_TAGS_STR = ", ".join(TTS_TAGS)
 
-USE_LLAMA_CPP = True
+USE_LLAMA_CPP = False
 
 if os.path.exists(TAG_STATS_PATH):
     df_stats = pd.read_csv(TAG_STATS_PATH)
