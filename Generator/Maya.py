@@ -6,11 +6,12 @@ import warnings
 import numpy as np
 import threading
 import queue
+import gc
 from pathlib import Path
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
-from Generator.utils import createChunks, batch_sentences
+from Generator.utils import batch_sentences
 from snac import SNAC
 
 warnings.filterwarnings("ignore")
@@ -109,7 +110,6 @@ def getModels(MODEL_PATH):
         "maya-research/maya1" if platform != "Kaggle" else '/kaggle/input/maya/transformers/1/2/Model',
         cache_dir=MODEL_PATH,
         torch_dtype=torch.float16,
-        # dtype="float16",
         trust_remote_code=True
     )
     model.eval()
@@ -152,9 +152,9 @@ def convert(Args, content, title, outputPath):
 
     GPUCount = Args.Generator.GPU.__dict__[Args.Platform]
 
-    chunks = createChunks(content)
+    chunks = batch_sentences(content)
 
-    torch.manual_seed(0)
+    torch.manual_seed(3542)
 
     if GPUCount > 0:
         print("Running in GPU env.")
@@ -168,9 +168,7 @@ def convert(Args, content, title, outputPath):
 def processVoice(model, device, tokenizer, snac_model, text, description, part):
     prompt = build_prompt(tokenizer, description, text)
     inputs = tokenizer(prompt, return_tensors="pt")
-
-    if torch.cuda.is_available():
-        inputs = {k: v.to(device) for k, v in inputs.items()}
+    inputs = {k: v.to(device) for k, v in inputs.items()}
 
     global generated_ids
     EOS_FOUND = False
@@ -188,7 +186,7 @@ def processVoice(model, device, tokenizer, snac_model, text, description, part):
                 eos_token_id=CODE_END_TOKEN_ID,  # Stop at end of speech token
                 pad_token_id=tokenizer.pad_token_id,
                 use_cache=True,
-                attn_implementation="flash_attention_2"
+                # attn_implementation="flash_attention_2"
             )
 
             generated_ids = outputs[0, inputs['input_ids'].shape[1]:].tolist()
@@ -221,19 +219,33 @@ def processVoice(model, device, tokenizer, snac_model, text, description, part):
         z_q = snac_model.quantizer.from_codes(codes_tensor)
         audio = snac_model.decoder(z_q)[0, 0].cpu().numpy()
 
+    del z_q, codes_tensor, generated_ids, inputs
+    torch.mps.empty_cache()
+    gc.collect()
+
     return audio
 
 
 def saveAudio(outputPath, audio_chunks, title):
-    silence = np.zeros(int(0.1 * 24000))
-    full_audio = [audio_chunks[0], np.zeros(int(0.25 * 24000))]
-    for audio in audio_chunks[1:-1]:
-        full_audio.append(audio)
-        full_audio.append(silence)
-    full_audio.append(audio_chunks[-1])
-    full_audio = np.concatenate(full_audio)
-    file = outputPath + f"{title}.npy"
-    Path(file).parent.mkdir(parents=True, exist_ok=True)
+    silence_first = np.zeros(int(0.25 * 24000), dtype=np.float32)
+    silence_normal = np.zeros(int(0.1 * 24000), dtype=np.float32)
+    full = []
+    for i, chunk in enumerate(audio_chunks):
+        if chunk is None or len(chunk) == 0:
+            continue
+        full.append(chunk)
+        if i < len(audio_chunks) - 1:
+            if i == 0:
+                full.append(silence_first)
+            else:
+                full.append(silence_normal)
+
+    if not full:
+        full_audio = np.zeros(1, dtype=np.float32)
+    else:
+        full_audio = np.concatenate(full)
+    file = os.path.join(outputPath, f"{title}.npy")
+    Path(outputPath).mkdir(parents=True, exist_ok=True)
     np.save(file, full_audio)
 
 
@@ -243,7 +255,10 @@ def cpuProcess(chunks, description, model, outputPath, snac_model, title, tokeni
     generation_times = []
     writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
     step = 0
-    device = "cpu"
+    device = "mps" if not torch.backends.mps.is_built() and torch.backends.mps.is_available() else "cpu"
+    if device == "mps":
+        model = model.to(device)
+        snac_model = snac_model.to(device)
     audio_path = outputPath + f"audios/{title}/"
     for part, chunk in enumerate(tqdm(chunks, desc="Generating audio")):
         # print(chunk)
@@ -284,7 +299,6 @@ def cpuProcess(chunks, description, model, outputPath, snac_model, title, tokeni
 
 def multiGPU(chunks, description, outputPath, title, MODEL_PATH):
     writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
-    chunks = batch_sentences(chunks)
     available_gpus = torch.cuda.device_count()
 
     q = queue.Queue()
