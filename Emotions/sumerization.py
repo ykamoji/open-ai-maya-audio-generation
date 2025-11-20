@@ -8,53 +8,82 @@ from utils import updateCache
 
 def build_prompt(content):
     return f"""
-        You are an expert YA fantasy editor.
-        
-        Before generating titles, extract privately:
-        1. The main important events that happen
-        2. Any powers, objects, or supernatural effects used
-        3. Physical actions or consequences
-        4. Emotional stakes for the characters
-        5. Motivations 
-        6. Foreshadowing hooks
-        
-        ---------------------------------------
-        TITLE GENERATION 
-        Generate **20 YA fantasy chapter titles**, grouped as:
-        
-        A. 5 atmospheric  
-        B. 5 character-driven 
-        C. 5 high-stakes 
-        D. 5 foreshadowing
-        
-        Rules:
-        1. Titles MUST be inspired by main events in the chapter YOUR INTERNAL NOTES.
-        2. Titles must sound like they can ONLY belong to this chapter.
-        3. No clichés or generic fantasy patterns.
-        4. No vague mood words or abstract nouns or pronouns.  
-        5. Absolutely avoid these words:
-           shadow, dark, darkness, secret, hidden, fallen, whisper, veil,
-           realm, ancient, destiny, fate, echo, storm
-        6. Use sensory or concrete imagery tied to events in the chapter.
-        7. 1–6 words each.
-        8. Priority: imagery → emotional weight → YA rhythm.
-        9. Refine the titles with better cadence, symbolism, emotional impact and uniqueness.
-        
-        ---------------------------------------
-        FINAL OUTPUT (ONLY JSON)
-        Return ONLY JSON object in this format:
-        
-        {{
-          "Atmospheric": ["t1", "t2", "t3", "t4", "t5"],
-          "CharacterDriven": ["t1", "t2", "t3", "t4", "t5"],
-          "HighStakes": ["t1", "t2", "t3", "t4", "t5"],
-          "Foreshadowing": ["t1", "t2", "t3", "t4", "t5"]
-        }}
+        You are a master storyteller blending Fantasy + Alien Sci-Fi with vivid sensory detail,
+        emotional resonance, and tight YA pacing. Generate **10 highly specific chapter titles**
+        for the user-provided chapter.
 
-        ---------------------------------------
-        CHAPTER:
+        You MUST follow all rules:
+
+        CONTENT RULES
+        1. Titles must reflect the major events in the chapter.
+        2. Include powers, abilities, alien tech, or supernatural effects used.
+        3. Include physical actions or consequences.
+        4. Include emotional stakes of the characters.
+        5. Include motivations or internal conflicts.
+        6. Include a phrase that *sounds like* something a character might think or say.
+
+        STYLE RULES
+        - Titles must sound like they can ONLY belong to this chapter.
+        - No clichés, no vague mood words, no abstract nouns.
+        - No generic fantasy patterns.
+        - Titles must use concrete, sensory imagery.
+        - Titles must be 1-6 words.
+        - Do NOT use ANY of these banned words:
+          shadow, dark, darkness, secret, hidden, fallen, whisper, veil,
+          realm, ancient, destiny, fate, echo, storm
+        - If a banned word appears, remove it and rewrite the title.
+
+        EXAMPLE RESPONSES
+
+        CHAPTER 1
+        A boy activates an unstable alien crystal for the first time, 
+        it burns his palms, lights up the forest canopy, and pulls a
+        swarm of metallic insects toward him. He tries to shut it down
+        but loses control. His sister drags him away as the insects melt
+        through trees behind them.
+
+        TITLES:
+        1. Crystal Heat on My Hands
+        2. The Canopy Glows Too Bright
+        3. Flight Through Silver Wings
+        4. Trees Dripping Metal
+        5. Pulse He Can’t Shut Off
+
+        CHAPTER 2
+        A girl merges with a bio-engineered amphibious suit. The fusion
+        hurts. She dives into a flooded alien city to rescue her friend
+        trapped under collapsed coral structures. The water absorbs her
+        fear as she pushes deeper, hearing living machines shift in the walls.
+
+        TITLES:
+        1. Skin That Isn’t Mine
+        2. Descent Through Blue Ruins
+        3. Coral Grinding Underfoot
+        4. The City That Breathes Water
+        5. Her Fear in the Current
+
+        CHAPTER 3
+        A young warrior duels an intruder whose body refracts light like
+        glass. The intruder slices the air, bending heat, melting stone.
+        The warrior realizes he’s outmatched but fights to protect the
+        egg-shaped relic behind him. When the relic hums, both combatants
+        freeze.
+
+        TITLES:
+        1. Heat Curling Off His Blade
+        2. Stone Melt at My Feet
+        3. Fight Beside the Humming Relic
+        4. Glassblood Strikes Too Fast
+        5. When the Egg Begins to Sing
+
+        NOW CREATE TITLES FOR THE FOLLOWING CHAPTER:
+
         {content}
-        ---------------------------------------
+
+        OUTPUT INSTRUCTIONS:
+        Return ONLY a numbered list of **10 titles**, nothing else.
+
+        OUTPUT:
     """.strip()
 
 
@@ -107,25 +136,14 @@ def getSummaries(content, model, tokenizer):
 
 
 def extractSuggestions(output):
-
-    json_match = re.search(r"\{[\s\S]*?\}", output, re.DOTALL)
-
-    if not json_match:
-        print("No JSON found in model output.")
-        return []
-
-    json_text = json_match.group(0)
-
-    try:
-        titles = json.loads(json_text)
-    except json.JSONDecodeError:
-        json_text_cleaned = json_text.replace("\n", " ").replace(",]", "]")
-
-        try:
-            titles = json.loads(json_text_cleaned)
-        except:
-            return []
-
+    titles = []
+    for line in output.splitlines():
+        match = re.match(r'\s*(\d+)\.\s+(.*)', line)
+        if match:
+            title = match.group(2).strip()
+            titles.append(title)
+        if len(titles) >= 10:
+            break
     return titles
 
 
@@ -140,17 +158,13 @@ def summarization(Args, pages, TITLE_CACHE):
         try:
             summary = getSummaries(page['content'], model, tokenizer)
             if summary:
-                suggestions = []
-                for cat in summary:
-                    suggestions.extend(summary[cat])
-
                 previous_suggestion = []
                 if page['title'] in TITLE_CACHE:
                     previous_suggestion = TITLE_CACHE[page['title']]["suggestions"]
                 else:
                     TITLE_CACHE[page['title']] = {}
 
-                TITLE_CACHE[page['title']]['suggestions'] = previous_suggestion + suggestions
+                TITLE_CACHE[page['title']]['suggestions'] = previous_suggestion + summary
                 updateCache('titleCache.json', TITLE_CACHE)
                 processed += 1
             else:
