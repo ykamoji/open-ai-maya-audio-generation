@@ -1,12 +1,14 @@
 import re
 
+pattern = r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<![A-Z]\.)(?<=\.)\s'
+
 
 def createChunks(content, limit=None):
 
     chunks = []
     paragraphs = [p.strip("\n").strip() for p in content.split("\n\n") if p.strip()]
     if limit is not None:
-        chunks = paraChunks(limit, paragraphs)
+        chunks = paraChunks(paragraphs, limit)
     else:
         for para in paragraphs:
             lines = convert_to_sentences(para)
@@ -17,17 +19,13 @@ def createChunks(content, limit=None):
 
 
 def convert_to_sentences(content):
-    lines = []
-    pattern = r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<![A-Z]\.)(?<=\.)\s'
-    for se in re.split(pattern, content):
-        lines.append(re.sub(r'(^|\s)\d+\.\s*', r'\1', se))
-    return lines
+    return [se for se in re.split(pattern, content) if se.strip()]
 
 
-def batch_sentences(lines, limit=200):
-    result = []
+def batch_sentences(lines, limit=300):
+    result = [lines[0], ""]
     current = ""
-    for line in lines:
+    for line in lines[1:]:
         if line.strip() == "":
             if current:
                 result.append(current.strip())
@@ -48,12 +46,11 @@ def batch_sentences(lines, limit=200):
     return result
 
 
-
-def paraChunks(limit, paragraphs):
+def paraChunks(paragraphs, limit):
     chunks = []
     for para in paragraphs:
         if len(para) >= limit:
-            lines = [line for line in para.split(".") if line.strip()]
+            lines = [line for line in re.split(pattern, para) if line.strip()]
             counter = 0
             i = 0
             split_pos = [0]

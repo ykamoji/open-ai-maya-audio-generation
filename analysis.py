@@ -83,5 +83,5 @@ def post_processing_helper():
 
 
 if __name__ == "__main__":
-    # analysis()
-    post_processing_helper()
+    analysis()
+    # post_processing_helper()
