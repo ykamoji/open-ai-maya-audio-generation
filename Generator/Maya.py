@@ -227,8 +227,8 @@ def processVoice(model, device, tokenizer, snac_model, text, description, part):
 
 
 def saveAudio(outputPath, audio_chunks, title):
-    silence_first = np.zeros(int(0.25 * 24000), dtype=np.float32)
-    silence_normal = np.zeros(int(0.1 * 24000), dtype=np.float32)
+    silence_first = np.zeros(int(0.3 * 24000), dtype=np.float32)
+    silence_normal = np.zeros(int(0.15 * 24000), dtype=np.float32)
     full = []
     for i, chunk in enumerate(audio_chunks):
         if chunk is None or len(chunk) == 0:
@@ -262,10 +262,9 @@ def cpuProcess(chunks, description, model, outputPath, snac_model, title, tokeni
     audio_path = outputPath + f"audios/{title}/"
     for part, chunk in enumerate(tqdm(chunks, desc="Generating audio")):
         # print(chunk)
-        input_length = len(chunk)
-        if input_length == 0:
+        if chunk.strip():
             # Adding a pause between paras to keep the conversation seperate
-            audio_chunks.append(np.zeros(int(0.125 * 24000)))
+            audio_chunks.append(np.zeros(int(0.2 * 24000)))
             # print(f"Voice generation for part {step} (para break)")
             continue
         # print(f"Voice generation for part {step}/{total} ...")
@@ -276,6 +275,7 @@ def cpuProcess(chunks, description, model, outputPath, snac_model, title, tokeni
         # print(f"Voice generation for part {step}/{total} ({audio_duration:.2f} sec) in {generation_time:.2f} sec")
         audio_chunks.append(audio)
         rtf = generation_time / audio_duration if audio_duration > 0 else float('inf')
+        input_length = len(chunk)
         input_lengths.append(input_length)
         generation_times.append(generation_time)
 
@@ -305,7 +305,7 @@ def multiGPU(chunks, description, outputPath, title, MODEL_PATH):
 
     count = 0
     for idx, text in enumerate(chunks):
-        q.put((idx, text))
+        q.put((idx, text.strip()))
         count += 1
 
     print(f"Total prompts {count}")
@@ -381,7 +381,7 @@ def gpu_worker(gpu_id, q, model, snac_model, tokenizer, description, sharedData,
             break
 
         if not text.strip():
-            audio = np.zeros(int(0.125 * 24000))
+            audio = np.zeros(int(0.2 * 24000))
             generation_time = 0
             audio_duration = 0
             # print(f"[{gpu_id}] Voice generation for part {idx} (para break)")
