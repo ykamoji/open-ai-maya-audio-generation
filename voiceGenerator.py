@@ -3,7 +3,6 @@ import glob
 import json
 import random
 import yaml
-import time
 import re
 import argparse
 import soundfile as sf
@@ -62,14 +61,14 @@ class VoiceGenerator:
 
     def add_title(self, notebook_name, section_name, title):
         number = re.search(r"(?i)\bchat?pter\s*#?\s*(\d+)", title).group(1)
-        titles = self.TITLE_CACHE.get(notebook_name, {}).get(section_name, {}).get(title, [None])
+        titles = self.TITLE_CACHE.get(notebook_name, {}).get(section_name, {}).get(title, {})
         title = ""
         if "best" in titles:
             title = titles["best"]
         elif "suggestion" in titles:
             title = random.choice(titles["suggestion"])
 
-        return f"Chapter {number} " + title
+        return f"Chapter {number}." + (f" {title}" if title else "")
 
     def generation(self):
 
@@ -108,10 +107,11 @@ class VoiceGenerator:
         if self.Args.Step >= 2:
             print(f"Starting post processing for voice texts.")
             voice_cache = self.VOICE_CACHE[notebook_name][section_name]
+            post_process_paragraphs = []
             for key in tqdm(voice_cache, desc=f"Processing content"):
                 split_paragraph = False
                 cleaned_paragraphs = []
-                for idx, paragraph in enumerate(voice_cache[key]):
+                for paragraph in voice_cache[key]:
                     # Remove the prefix at the beginning.
                     for prefix in ["Here's the edited paragraph:\n\n", "Here's the revised paragraph:\n\n"]:
                         paragraph = paragraph.removeprefix(prefix)
@@ -138,11 +138,11 @@ class VoiceGenerator:
                             block = block.strip()
                             if block:
                                 final_paragraphs.append(block)
-                    voice_cache[key] = final_paragraphs
-                else:
-                    voice_cache[key] = cleaned_paragraphs
+                    cleaned_paragraphs = final_paragraphs
 
-            self.VOICE_CACHE[notebook_name][section_name] = voice_cache
+                post_process_paragraphs.append(cleaned_paragraphs)
+
+            self.VOICE_CACHE[notebook_name][section_name] = post_process_paragraphs
             updateCache('voiceCache.json', self.VOICE_CACHE)
             print(f"Post processing completed voice texts.")
 
@@ -150,10 +150,10 @@ class VoiceGenerator:
             print(f"\nStarting summarization for {notebook_name} {section_name}.")
             contents_to_process = []
             voice_cache = self.VOICE_CACHE[notebook_name][section_name]
-            for key in voice_cache:
+            for page in pages[:limit]:
                 contents_to_process.append({
-                    "title": key,
-                    "content": voice_cache[key],
+                    "title": page["title"],
+                    "content": voice_cache[page["title"]],
                 })
 
             if contents_to_process:
@@ -176,34 +176,37 @@ class VoiceGenerator:
         if self.Args.Step >= 4:
             print(f"Creating Emotions for {notebook_name} {section_name}")
             contents_to_process = []
+            voice_cache = self.VOICE_CACHE[notebook_name][section_name]
+            nb_cache = self.EMOTION_CACHE.setdefault(notebook_name, {})
+            sec_cache = nb_cache.setdefault(section_name, {})
             for page in pages[:limit]:
-                if not self.EMOTION_CACHE or page["title"] not in self.EMOTION_CACHE:
+                if page["title"] not in sec_cache:
                     contents_to_process.append(
                         {
                             "title": page["title"],
                             "suggested_title": self.add_title(notebook_name, section_name, page["title"]),
-                            "content": self.VOICE_CACHE[page["title"]]
+                            "content": voice_cache[page["title"]]
                         })
             if contents_to_process:
                 print(f"Need to add emotions to {len(contents_to_process)} pages")
-                emotion_paragraphs = addEmotions(self.Args, contents_to_process, self.EMOTION_CACHE)
+                emotion_paragraphs = addEmotions(self.Args, contents_to_process, sec_cache)
+                self.EMOTION_CACHE[notebook_name][section_name] = sec_cache
                 if emotion_paragraphs == len(contents_to_process):
                     print(f"Emotion adding completed!")
                 else:
                     print(f"Something went wrong! Check the logs.")
 
         if self.Args.Step == 5:
-            end = len(pages[:limit]) - 1
             outputPath = self.Args.Generator.AudioOutputPath.__dict__[self.Args.Platform]
-            for pageNo, page in enumerate(pages[:limit]):
+            nb_cache = self.EMOTION_CACHE.setdefault(notebook_name, {})
+            sec_cache = nb_cache.setdefault(section_name, {})
+            for page in pages[:limit]:
                 print(f"Generating voice for {notebook_name} {section_name} {page['title']}")
-                content = self.EMOTION_CACHE[page['title']]
+                content = sec_cache[page['title']]
                 if self.Args.Generator.OpenAI.Action:
                     openAIConvert(self.Args, content, page["title"])
                 elif self.Args.Generator.Maya.Action:
                     mayaConvert(self.Args, content, page["title"], outputPath)
-                if pageNo != end:
-                    time.sleep(60)
 
             audios = [file for file in glob.glob(outputPath + "audios/*.npy") if "partial" not in file]
             audios.sort(key=os.path.getmtime)

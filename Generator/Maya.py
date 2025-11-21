@@ -11,6 +11,7 @@ from pathlib import Path
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
+from Emotions.utils import fast_generate_sampling
 from Generator.utils import batch_sentences
 from snac import SNAC
 
@@ -175,8 +176,9 @@ def processVoice(model, device, tokenizer, snac_model, text, description, part):
     max_new_tokens = 2048
     while not EOS_FOUND:
         with torch.inference_mode():
-            outputs = model.generate(
-                **inputs,
+            outputs = fast_generate_sampling(
+                dynamic_ids=inputs["input_ids"],
+                attention_mask=inputs["attention_mask"],
                 max_new_tokens=max_new_tokens,  # Increase to let model finish naturally
                 min_new_tokens=28,  # At least 4 SNAC frames
                 temperature=0.4,
@@ -185,7 +187,7 @@ def processVoice(model, device, tokenizer, snac_model, text, description, part):
                 do_sample=True,
                 eos_token_id=CODE_END_TOKEN_ID,  # Stop at end of speech token
                 # pad_token_id=tokenizer.pad_token_id,
-                use_cache=True,
+                # use_cache=True,
                 # attn_implementation="flash_attention_2"
             )
 

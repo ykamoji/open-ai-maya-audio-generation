@@ -82,6 +82,7 @@ def repeat_past_kv(past_key_values, batch_size):
         new_past.append((k_rep, v_rep))
     return tuple(new_past)
 
+
 @torch.inference_mode()
 def fast_generate(
         model,
