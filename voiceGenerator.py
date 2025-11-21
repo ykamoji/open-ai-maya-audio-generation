@@ -106,7 +106,7 @@ class VoiceGenerator:
         if self.Args.Step >= 2:
             print(f"Starting post processing for voice texts.")
             voice_cache = self.VOICE_CACHE[notebook_name][section_name]
-            post_process_paragraphs = []
+            post_process_paragraphs = {}
             for key in tqdm(voice_cache, desc=f"Processing content"):
                 split_paragraph = False
                 cleaned_paragraphs = []
@@ -139,7 +139,7 @@ class VoiceGenerator:
                                 final_paragraphs.append(block)
                     cleaned_paragraphs = final_paragraphs
 
-                post_process_paragraphs.append(cleaned_paragraphs)
+                post_process_paragraphs[key] = cleaned_paragraphs
 
             self.VOICE_CACHE[notebook_name][section_name] = post_process_paragraphs
             updateCache('voiceCache.json', self.VOICE_CACHE)
