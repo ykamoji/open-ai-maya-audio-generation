@@ -7,7 +7,7 @@ Graph:
 Emotions:
   Quantize: False
   ModelPath:
-    Default: /Users/ykamoji/Documents/open-ai-maya-audio-generation/models/models-llama-quantized/llama-3.1-8b-q2_K.gguf
+    Default: /Users/ykamoji/Documents/open-ai-maya-audio-generation/models/
     Kaggle: # For Kaggle, use internal cache
     Colab: /content/open-ai-maya-audio-generation/Models/
 Generator:

@@ -6,8 +6,8 @@ import math
 # ---------------------------------------------------------
 
 REQUIRED_MIN_SCORE = {
-    "angry": 0.55,
-    "sarcastic": 0.55,
+    "angry": 0.65,
+    "sarcastic": 0.60,
     "excited": 0.60,
     "curious": 0.60,
     "whisper": 0.60,
@@ -26,7 +26,7 @@ REQUIRED_MIN_SCORE = {
 
     "chuckle": 0.55,
     "giggle": 0.55,
-    "laugh": 0.50,
+    "laugh": 0.60,
     "laugh_harder": 0.65,
     "snort": 0.70
 }
@@ -37,7 +37,7 @@ FALSE_POSITIVE_PENALTY = {
     "gasp": 0.08,
 
     "appalled": 0.10,
-    "mischievous": 0.12,
+    "mischievous": 0.00,
     "disappointed": 0.08,
 
     "curious": 0.10,
@@ -129,12 +129,11 @@ STRONG_CUES = {
         "face twisted in disgust", "staggered back", "what on earth"
     ],
     "mischievous": [
-        "mischievous grin", "glint in his eye", "glint in her eye",
+        "grin", "glint in his eye", "glint in her eye",
         "smirked", "playful smirk", "grinned slyly", "scheming"
     ],
     "disappointed": [
-        "disappointed", "let down", "crestfallen", "slumped",
-        "face fell", "voice fell", "eyes dimmed", "deep sigh"
+        "let down", "crestfallen", "slumped", "face fell", "voice fell", "eyes dimmed", "deep sigh"
     ],
 }
 
@@ -143,10 +142,10 @@ MODERATE_CUES = {
          "annoyed", "irritated", "tense voice", "short tone", "frustrated", "brows furrowed", "sharp tone"
     ],
     "sarcastic": [
-        "smirked", "dryly", "said in a flat tone",  "under her breath sarcastically"
+        "smirked", "dryly", "flat tone"
     ],
     "excited": [
-        "thrilled", "eager", "anticipation", "buzzing", "growing louder", "rising energy", "building excitement",
+        "thrilled", "eager", "anticipation", "buzzing", "louder", "rising energy", "excitement",
         "leaned forward", "eyes sparkled", "loud"
     ],
     "curious": [
@@ -201,8 +200,7 @@ MODERATE_CUES = {
         "playful look", "tilted head with a grin"
     ],
     "disappointed": [
-        "looked down", "quiet tone", "shoulders lowered",
-        "tone softened", "weak smile"
+        "looked down", "quiet tone", "shoulders lowered", "tone softened", "weak smile"
     ],
 }
 
@@ -214,7 +212,7 @@ WEAK_CUES = {
         "felt alive", "heart picked up", "quickened pace",
         "could feel it in the air", "electric atmosphere"
         "quick movements", "brisk pace", "bright surroundings",
-        "momentum grew", "felt the pull forward", "alive with motion"
+        "momentum grew", "felt the pull forward", "alive with motion", "cheers"
     ],
 
     "curious": [
@@ -335,14 +333,14 @@ WEAK_CUES = {
         "tried to hide a smile", "nearly broke into a smile", "pretended not to notice", "looked far too casual",
     ],
     "disappointed": [
-         "quiet for a moment", "voice low", "moment stretched out", "air grew still",
+        "quiet for a moment", "voice low", "moment stretched out", "air grew still",
         "looked down briefly", "glanced at the floor", "slowed his step", "slowed her step",
         "shoulders dipped slightly", "posture loosened", "let the silence linger", "fell quiet again",
         "breath softened", "voice softened", "held her arm lightly", "held his arm lightly",
         "stared at the ground", "stared past him", "lowered his gaze", "lowered her gaze",
         "hands relaxed at sides", "hands dropped slightly",
         "exhaled without noticing", "paused mid-sentence",
-        "tone faded briefly", "words trailed off",
+        "tone faded briefly", "words trailed off", "but I couldn't"
     ],
 }
 
@@ -370,7 +368,7 @@ def  score_lexical(tag, text):
     # --------------------------------------------------------
     for cue in STRONG_CUES.get(tag, []):
         cue_l = cue.lower()
-        if cue_l in t:
+        if re.search(rf"\b{re.escape(cue_l)}\b", t):
             score += 2.0
 
     # --------------------------------------------------------
@@ -378,7 +376,7 @@ def  score_lexical(tag, text):
     # --------------------------------------------------------
     for cue in MODERATE_CUES.get(tag, []):
         cue_l = cue.lower()
-        if cue_l in t:
+        if re.search(rf"\b{re.escape(cue_l)}\b", t):
             score += 1.0
 
     # --------------------------------------------------------
@@ -386,7 +384,7 @@ def  score_lexical(tag, text):
     # --------------------------------------------------------
     for cue in WEAK_CUES.get(tag, []):
         cue_l = cue.lower()
-        if cue_l in t:
+        if re.search(rf"\b{re.escape(cue_l)}\b", t):
             score += 0.5
 
     # --------------------------------------------------------
@@ -402,13 +400,6 @@ def lexical_candidate_tags(text) :
         if raw_lex >= 1.5:
             candidates.append(tag)
     return candidates
-
-
-def normalize_lex_score(score):
-    if score <= 0.0:
-        return 0.0
-    capped = min(score, 2.5)
-    return capped / 2.5
 
 # ---------------------------------------------------------
 # GENRE ADD-ON RULES
@@ -541,8 +532,8 @@ def rerank(text, candidate_tags, genre="normal", top_k=2):
 # ---------------------------------------------------------
 
 if __name__ == "__main__":
-    curr_s = "As I approached the gate leading to the coliseum field, the roar of the crowd grew louder with every step."
+    curr_s = "That made me feel like he knows just how strong this person is."
 
-    model_tags = ['SIGH']
+    model_tags = ['CURIOUS']
 
-    print(rerank(curr_s, [t.lower() for t in model_tags], genre="fantasy"))
+    print(rerank(curr_s, [t.lower() for t in model_tags], genre="YA"))

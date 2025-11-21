@@ -3,11 +3,12 @@ import os
 import re
 import json
 import logging
+import inspect
 import pandas as pd
 from tqdm import tqdm
 from collections import Counter, deque
 from Emotions.toneReRanker import rerank
-from Emotions.utils import getModelAndTokenizer, split_sentences
+from Emotions.utils import getModelAndTokenizer, split_sentences, fast_generate, repeat_past_kv
 from utils import updateCache
 
 if os.path.isfile('emotions.log'):
@@ -42,8 +43,6 @@ TTS_TAGS_SET = set(TTS_TAGS)
 
 TTS_TAGS_STR = ", ".join(TTS_TAGS)
 
-USE_LLAMA_CPP = False
-
 if os.path.exists(TAG_STATS_PATH):
     df_stats = pd.read_csv(TAG_STATS_PATH)
     global_tag_counts = Counter(dict(zip(df_stats["emotion"], df_stats["count"])))
@@ -54,7 +53,7 @@ else:
     }
     global_tag_counts = Counter(tag_tracker)
 
-HISTORY_WINDOW = 4
+HISTORY_WINDOW = 5
 recent_tag_history = deque(maxlen=HISTORY_WINDOW)
 
 
@@ -158,8 +157,7 @@ def get_context(i, sentences):
     return prev_s, curr_s, next_s
 
 
-def build_detection_prompt(prev_s, curr_s, next_s):
-    return f"""
+DETECTION_PREFIX = inspect.cleandoc(f"""
         You are a expert TTS emotion cue detector.
 
         Use the PREVIOUS and NEXT sentences ONLY as context to understand the emotional tone of the TARGET sentence.
@@ -215,6 +213,11 @@ def build_detection_prompt(prev_s, curr_s, next_s):
         OUTPUT: {{"tags": ["EXHALE"]}}
 
         PREVIOUS SENTENCE:
+        """) + "\n"
+
+
+def build_dynamic_suffix(prev_s, curr_s, next_s):
+    return inspect.cleandoc(f"""
         {prev_s}
 
         TARGET SENTENCE:
@@ -224,61 +227,92 @@ def build_detection_prompt(prev_s, curr_s, next_s):
         {next_s}
 
         Answer:
-        """
+    """)
 
 
-def detect_and_rank_batch(indices, sentences, model, tokenizer):
+DETECTION_STATIC_IDS = None
+DETECTION_STATIC_MASK = None
+DETECTION_STATIC_PAST = None
 
-    outputs = [[]] * len(indices)
 
-    for start in range(0, len(indices), 2):
-        chunk = indices[start:start + 2]
-        prompts = []
+def init_detection_prefix_cache(model, tokenizer):
+
+    global DETECTION_STATIC_IDS, DETECTION_STATIC_MASK, DETECTION_STATIC_PAST
+
+    if DETECTION_STATIC_IDS is not None and DETECTION_STATIC_PAST is not None:
+        return  # already initialized
+
+    device = next(model.parameters()).device
+
+    enc = tokenizer(DETECTION_PREFIX, return_tensors="pt").to(device)
+    DETECTION_STATIC_IDS = enc["input_ids"]        # (1, prefix_len)
+    DETECTION_STATIC_MASK = enc["attention_mask"]  # (1, prefix_len)
+
+    with torch.inference_mode():
+        out = model(
+            input_ids=DETECTION_STATIC_IDS,
+            attention_mask=DETECTION_STATIC_MASK,
+            use_cache=True,
+        )
+
+    # detach so we don't track autograd history
+    DETECTION_STATIC_PAST = tuple((k.detach(), v.detach()) for k, v in out.past_key_values)
+
+
+def detect_and_rank_batch(indices, sentences, model, tokenizer, chunk_size: int = 20):
+
+    global DETECTION_STATIC_IDS, DETECTION_STATIC_MASK, DETECTION_STATIC_PAST
+
+    device = next(model.parameters()).device
+    init_detection_prefix_cache(model, tokenizer)
+
+    outputs = [[] for _ in range(len(indices))]
+
+    for start in range(0, len(indices), chunk_size):
+        chunk = indices[start:start + chunk_size]
+
+        dynamic_prompts = []
         for idx in chunk:
             prev_s, curr_s, next_s = get_context(idx, sentences)
-            prompts.append(build_detection_prompt(prev_s, curr_s, next_s))
+            dynamic_prompts.append(build_dynamic_suffix(prev_s, curr_s, next_s))
 
-        lines = "\n".join([sentences[idx] for idx in chunk])
-        logger.debug(f"Running emotion detection for \"{lines}\"")
-        if USE_LLAMA_CPP:
-            batch_results = []
-            for prompt in prompts:
-                try:
-                    result = model(
-                        prompt,
-                        max_tokens=50,
-                        temperature=0.0,
-                        top_k=1,
-                        top_p=1.0,
-                        repeat_penalty=1.0,
-                    )
-                    text = "Answer: " + result["choices"][0]["text"]
-                except Exception as e:
-                    logger.error(f"Exception: {e}. Model cannot detect emotions.")
-                    text = "Answer: "
-                batch_results.append(text)
-        else:
-            try:
-                inputs = tokenizer(prompts, return_tensors="pt", padding=True).to("cuda")
-                with torch.inference_mode():
-                    out = model.generate(
-                        **inputs,
-                        max_new_tokens=50,
-                        do_sample=False,
-                        temperature=0.0,
-                    )
-                batch_results = tokenizer.batch_decode(out, skip_special_tokens=True)
-            except Exception as e:
-                logger.error(f"Exception: {e}. Model cannot detect emotions.")
-                batch_results = []
-            finally:
-                for var in ["out", "inputs"]:
-                    if var in locals():
-                        del locals()[var]
+        dyn = tokenizer(dynamic_prompts, return_tensors="pt", padding=True).to(device)
+        dyn_ids = dyn["input_ids"]  # (B, dyn_len)
+        dyn_mask = dyn["attention_mask"]  # (B, dyn_len)
 
+        batch_size = dyn_ids.size(0)
+        # prefix_len = DETECTION_STATIC_IDS.size(1)
+
+        # full attention mask = [prefix_mask, dyn_mask]
+        static_mask = DETECTION_STATIC_MASK.repeat(batch_size, 1)  # (B, prefix_len)
+        full_mask = torch.cat([static_mask, dyn_mask], dim=1)  # (B, prefix_len + dyn_len)
+
+        # repeat prefix KV across batch
+        static_past_batch = repeat_past_kv(DETECTION_STATIC_PAST, batch_size)
+
+        logger.debug("Running emotion detection for:")
+        for idx in chunk:
+            logger.debug(f'  "{sentences[idx]}"')
+
+        try:
+            out_ids = fast_generate(
+                model,
+                dynamic_ids=dyn_ids,
+                attention_mask=full_mask,
+                max_new_tokens=50,
+                eos_token_id=tokenizer.eos_token_id,
+                past_key_values=static_past_batch,
+            )
+            batch_outputs = tokenizer.batch_decode(out_ids, skip_special_tokens=True)
+
+        except Exception as e:
+            logger.error(f"Exception during inference: {e}. Model cannot detect emotions.")
+            batch_outputs = [""] * len(chunk)
+
+        # Parse tags for each sentence
         for local_i, idx in enumerate(chunk):
             try:
-                base_tags = extract_emotion_tags(batch_results[local_i])
+                base_tags = extract_emotion_tags(batch_outputs[local_i])
                 logger.debug(f"Model returned {base_tags} emotions for \"{sentences[idx]}\"")
                 candidate_tags = [
                     t.replace("[", "").replace("]", "").lower()
@@ -286,19 +320,17 @@ def detect_and_rank_batch(indices, sentences, model, tokenizer):
                 ]
                 updated, scores = rerank(sentences[idx], candidate_tags, genre="YA", top_k=2)
                 if len(base_tags) > 0:
-                    if len(candidate_tags) == 0 or base_tags[0] != candidate_tags[0]:
-                        logger.warning(f"Re ranking updated from {base_tags} to {updated} ({scores}) emotions for \"{sentences[idx]}\"")
+                    if len(candidate_tags) == 0 or base_tags[0] != updated[0]:
+                        logger.warning(
+                            f"Re ranking updated from {base_tags} to {updated} ({scores}) emotions for \"{sentences[idx]}\"")
                 outputs[indices.index(idx)] = updated
             except Exception as e:
-                logger.error(f"Exception in rerank batch: {e}")
+                logger.error(f"Exception while parsing tags: {e}")
                 outputs[indices.index(idx)] = []
 
+        torch.cuda.empty_cache()
+
     return outputs
-
-
-def index_sentence(sentence: str):
-    words = sentence.split()
-    return " | ".join(f"{i}:{w}" for i, w in enumerate(words))
 
 
 def extract_index(text: str):
@@ -335,11 +367,10 @@ def shift_emotion_inside(sentence):
     return sentence
 
 
-def build_placement_prompt(sentence: str, tag: list):
-    prompt = f"""
+PLACEMENT_PREFIX = f"""
         You are an expert at placing TTS emotion tags into sentences.
 
-        Your job is to choose the BEST position to insert the tag {tag} inside the TARGET sentence, 
+        Your job is to choose the BEST position to insert the tag [TAG] inside the TARGET sentence, 
         without modifying any words. The tag will be inserted BEFORE the chosen word index.
 
         RULES:
@@ -378,78 +409,159 @@ def build_placement_prompt(sentence: str, tag: list):
         END
 
         TARGET SENTENCE:
+        """
+
+
+def get_static_placement_cache(tag, tokenizer, model):
+    global PLACEMENT_PREFIX_CACHE
+
+    if tag in PLACEMENT_PREFIX_CACHE:
+        return PLACEMENT_PREFIX_CACHE[tag]
+
+    # Build the text with TAG inserted
+    text = PLACEMENT_PREFIX.replace("<TAG>", tag)
+
+    enc = tokenizer(text, return_tensors="pt").to("cuda")
+
+    with torch.inference_mode():
+        out = model(
+            input_ids=enc["input_ids"],
+            attention_mask=enc["attention_mask"],
+            use_cache=True
+        )
+
+    static_ids = enc["input_ids"]  # (1, P)
+    static_mask = enc["attention_mask"]  # (1, P)
+    static_past = tuple((k.detach(), v.detach()) for (k, v) in out.past_key_values)
+
+    PLACEMENT_PREFIX_CACHE[tag] = {
+        "ids": static_ids,
+        "mask": static_mask,
+        "past": static_past
+    }
+
+    return PLACEMENT_PREFIX_CACHE[tag]
+
+
+def build_placement_dynamic(sentence: str):
+    return f"""
         {sentence}
 
         Answer:
         """
 
-    return prompt
-
 
 def insert_emotion_tag(sentences, tags, model, tokenizer):
-    prompts = [build_placement_prompt(s, t) for s, t in zip(sentences, tags)]
-    modified_sentences = sentences[:]
+
+    N = len(sentences)
+    device = next(model.parameters()).device
+
+    # 1. Fetch all prefix KV caches for the given batch of tags
+    static_ids_list = []
+    static_mask_list = []
+    static_past_list = []
+
+    for tag in tags:
+        entry = get_static_placement_cache(tag, tokenizer, model)
+
+        static_ids_list.append(entry["ids"])       # (1, P)
+        static_mask_list.append(entry["mask"])     # (1, P)
+        static_past_list.append(entry["past"])     # tuple of (1, H, L, D)
+
+    # Stack static prefix IDs/mask into a batch: (N, P)
+    # static_ids = torch.cat(static_ids_list, dim=0).to(device)
+    static_mask = torch.cat(static_mask_list, dim=0).to(device)
+
+    # 2. Encode dynamic suffix text
+    dynamic_texts = [build_placement_dynamic(s) for s in sentences]
+    dyn_enc = tokenizer(dynamic_texts, return_tensors="pt", padding=True).to(device)
+
+    dyn_ids = dyn_enc["input_ids"]         # (N, D)
+    dyn_mask = dyn_enc["attention_mask"]   # (N, D)
+
+    # 3. Combine masks for prefill
+    full_mask = torch.cat([static_mask, dyn_mask], dim=1)
+
+    # 4. Combine static past KV into a batch
+    #    We need to "broadcast" each (1,...) prefix KV entry into the correct batch slot
+    #    This means building a tuple of layers where:
+    #    layer_k[k][i] = static_past_list[i][k]
+    #    i.e., a per-row past KV.
+    layer_count = len(static_past_list[0])
+    batch_past = []
+
+    for layer_idx in range(layer_count):
+        # build batch for this layer
+        keys = []
+        vals = []
+        for entry in static_past_list:
+            k, v = entry[layer_idx]   # each one is (1, H, L, D)
+            keys.append(k)           # keep as (1, H, L, D), will cat later
+            vals.append(v)
+        # concatenate across batch: (N, H, L, D)
+        k_cat = torch.cat(keys, dim=0)
+        v_cat = torch.cat(vals, dim=0)
+        batch_past.append((k_cat, v_cat))
+
+    past_key_values = tuple(batch_past)
+
     try:
-        if USE_LLAMA_CPP:
-            batch_decoded = []
-            for prompt in prompts:
-                try:
-                    result = model(
-                        prompt,
-                        max_tokens=10,
-                        temperature=0.0,
-                        stop=[]
-                    )
-                    batch_decoded.append("Answer: " + result["choices"][0]["text"].strip())
-                except Exception as e:
-                    logger.error(f"Exception during placement call: {e}.")
-                    batch_decoded.append("")
-        else:
-            inputs = tokenizer(prompts, return_tensors="pt", padding=True, truncation=False).to('cuda')
+        out_ids = fast_generate(
+            model,
+            dynamic_ids=dyn_ids,
+            attention_mask=full_mask,
+            past_key_values=past_key_values,
+            max_new_tokens=10,
+            eos_token_id=tokenizer.eos_token_id,
+        )
 
-            with torch.inference_mode():
-                outputs = model.generate(
-                    **inputs,
-                    max_new_tokens=10,
-                    do_sample=False,
-                    temperature=0.0,
-                    pad_token_id=tokenizer.eos_token_id
-                )
+        # Strip dynamic prompt only (prefix is not in out_ids)
+        gen_only = out_ids[:, dyn_ids.shape[1]:]
 
-            batch_decoded = tokenizer.batch_decode(outputs, skip_special_tokens=True)
-        for i, decoded in enumerate(batch_decoded):
+        decoded_batch = tokenizer.batch_decode(gen_only, skip_special_tokens=True)
+
+        modified_lines = []
+
+        for i, decoded in enumerate(decoded_batch):
             index = extract_index(decoded)
             if index is None:
-                logger.error(f"Model couldn't find the index in the output \"{decoded}\"\nDefaulting to END.")
                 index = "END"
-            else:
-                is_valid_int = isinstance(index, int) and (0 <= index < len(sentences[i]))
-                index = index if (index == "END" or is_valid_int) else "END"
-            modified_sentences[i] = safe_insert(sentences[i], index, tags[i])
+                logger.error(f"Model couldn't find the index in the output \"{decoded}\"\nDefaulting to END.")
+
+            # Safeguard index
+            is_valid_int = isinstance(index, int) and (0 <= index < len(sentences[i].split()))
+            if not is_valid_int and index != "END":
+                index = "END"
+
+            modified_line = safe_insert(sentences[i], index, tags[i])
+            modified_line = shift_emotion_inside(modified_line)
+            modified_lines.append(modified_line)
 
     except Exception as e:
         logger.error(f"Exception: {e}. Not inserting emotion to this batch.")
-    finally:
-        for var in ["batch_decoded", "output", "inputs"]:
-            if var in locals():
-                del locals()[var]
+        return [""] * N
 
-    return modified_sentences
+    finally:
+        decoded_batch = None
+        out_ids = None
+        gen_only = None
+
+    torch.cuda.empty_cache()
+    return modified_lines
 
 
 DEFAULT_PRESETS = set(TONES + ['[LAUGH_HARDER]'])
 
 
-def process_detection(paragraph, model, tokenizer):
-    sentences = split_sentences(paragraph)
+def process_detection(lines, model, tokenizer):
     detections = []
     modified_lines = {}
 
-    indices = list(range(len(sentences)))
+    indices = list(range(len(lines)))
 
-    batch_tags = detect_and_rank_batch(indices, sentences, model, tokenizer)
+    batch_tags = detect_and_rank_batch(indices, lines, model, tokenizer)
 
-    for i, s in enumerate(sentences):
+    for i, s in enumerate(lines):
         try:
             tags = batch_tags[i]
             if tags:
@@ -463,7 +575,7 @@ def process_detection(paragraph, model, tokenizer):
                 logger.debug(f"No emotion detected for \"{s}\"")
                 modified_lines[i] = s
         except Exception as e:
-            logger.error(f"Exception: {e}. Skipping emotion detection on \"{sentences[i]}\"")
+            logger.error(f"Exception: {e}. Skipping emotion detection on \"{lines[i]}\"")
 
     return modified_lines, detections
 
@@ -478,8 +590,8 @@ def process_tone_rules(sentence, tag):
         return f"{sentence.strip('.')} {tag}."
 
 
-def process_paragraph(paragraph, model, tokenizer):
-    modified_lines, detections = process_detection(paragraph, model, tokenizer)
+def process_page(lines, model, tokenizer):
+    modified_lines, detections = process_detection(lines, model, tokenizer)
     sentences = []
     tags = []
     insert_line_pos = []
@@ -513,15 +625,17 @@ def addEmotions(Args, pages, EMOTION_CACHE):
     model, tokenizer = getModelAndTokenizer(MODEL_PATH, Args.Emotions.Quantize, Args.Platform)
 
     global global_tag_counts
-
     progress = 0
     for page in tqdm(pages, desc="Pages", ncols=100, position=0):
         logger.info(f"Starting {page['title']}...")
         content = page['content']
         outputs = []
         try:
+            lines = []
             for paragraph in tqdm(content, desc="Paragraphs", ncols=90, position=1):
-                outputs.extend(process_paragraph(paragraph, model, tokenizer))
+                lines.extend(split_sentences(paragraph))
+
+            outputs.extend(process_page(lines, model, tokenizer))
             if outputs:
                 outputs.insert(0, page['suggested_title'])
                 EMOTION_CACHE[page["title"]] = outputs
@@ -533,7 +647,6 @@ def addEmotions(Args, pages, EMOTION_CACHE):
         except Exception as e:
             print(f"Exception: {e}. Skipping {page['title']}.")
         finally:
-            torch.cuda.empty_cache()
             save_global_stats()
             save_unknown_tag_log()
 

@@ -2,7 +2,7 @@ import re
 import inspect
 import torch
 from tqdm import tqdm
-from Emotions.utils import getModelAndTokenizer, encode_no_bos
+from Emotions.utils import getModelAndTokenizer, encode_no_bos, fast_generate_sampling
 from utils import updateCache
 
 PROMPT_PREFIX = inspect.cleandoc(f"""
@@ -78,7 +78,6 @@ NOW CREATE TITLES FOR THE FOLLOWING CHAPTER:
 """) + "\n"
 
 PREFIX_KV_CACHE = None
-PREFIX_LEN = None
 PREFIX_ATTN = None
 
 
@@ -122,15 +121,15 @@ def getSummaries(content, model, tokenizer):
             suffix_ids = torch.full((1, 1), tokenizer.eos_token_id, device=suffix_ids.device)
         full_attn = torch.cat([PREFIX_ATTN, suffix_attn], dim=1)
         with torch.inference_mode():
-            generated = model.generate(
-                input_ids=suffix_ids,
+            generated = fast_generate_sampling(
+                model,
+                dynamic_ids=suffix_ids,
                 attention_mask=full_attn,
                 past_key_values=PREFIX_KV_CACHE,
                 max_new_tokens=150,
                 temperature=0.55,
                 top_p=0.92,
                 top_k=50,
-                do_sample=True,
                 repetition_penalty=1.08,
                 pad_token_id=tokenizer.eos_token_id
             )
@@ -141,8 +140,8 @@ def getSummaries(content, model, tokenizer):
     except Exception as e:
         print(f"Error {e}.")
     finally:
-        decoded = None
         generated = None
+        decoded = None
         output = None
 
     return response
@@ -166,9 +165,8 @@ def summarization(Args, pages, TITLE_CACHE):
 
     model, tokenizer = getModelAndTokenizer(MODEL_PATH, Args.Emotions.Quantize, Args.Platform)
 
-    global PREFIX_KV_CACHE, PREFIX_LEN, PREFIX_ATTN
+    global PREFIX_KV_CACHE, PREFIX_ATTN
     prefix_ids, prefix_attn = encode_no_bos(PROMPT_PREFIX, tokenizer, model.device)
-    PREFIX_LEN = prefix_ids.shape[1]
     PREFIX_ATTN = prefix_attn
 
     with torch.inference_mode():
@@ -193,7 +191,7 @@ def summarization(Args, pages, TITLE_CACHE):
 
         except Exception as e:
             print(f"Error {e}. Skipping for {page['title']}")
-        finally:
-            torch.cuda.empty_cache()
+
+        torch.cuda.empty_cache()
     return processed
 

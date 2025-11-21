@@ -184,7 +184,7 @@ def processVoice(model, device, tokenizer, snac_model, text, description, part):
                 repetition_penalty=1.1,  # Prevent loops
                 do_sample=True,
                 eos_token_id=CODE_END_TOKEN_ID,  # Stop at end of speech token
-                pad_token_id=tokenizer.pad_token_id,
+                # pad_token_id=tokenizer.pad_token_id,
                 use_cache=True,
                 # attn_implementation="flash_attention_2"
             )
