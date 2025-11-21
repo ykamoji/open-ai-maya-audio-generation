@@ -13,7 +13,7 @@ Emotions:
 Generator:
   PageLimit:  4 # number(s) or empty
   PageNo:
-  SkipTitleGeneration: True
+  SkipTitleGeneration: False
   AudioOutputPath:
     Default: output/
     Kaggle: /kaggle/working/output/

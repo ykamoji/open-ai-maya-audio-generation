@@ -45,7 +45,7 @@ def getModelAndTokenizer(MODEL_PATH, quantize, platform):
             "meta-llama/Llama-3.1-8B-Instruct" if platform != 'Kaggle' else "/kaggle/input/llama-3-1-8b-instruct/transformers/1/1/Model",
             cache_dir=MODEL_PATH,
             quantization_config=bnb_config,
-            device_map="auto",
+            device_map="balanced",
             torch_dtype=DTYPE,
             load_in_4bit=False,
             load_in_8bit=False
@@ -55,6 +55,7 @@ def getModelAndTokenizer(MODEL_PATH, quantize, platform):
 
         tokenizer = AutoTokenizer.from_pretrained(
             "meta-llama/Llama-3.1-8B-Instruct" if platform != 'Kaggle' else "/kaggle/input/llama-3-1-8b-instruct/transformers/1/1/Tokenizer",
+            use_fast=True,
             padding_side="left",
             cache_dir=MODEL_PATH)
 
@@ -64,6 +65,18 @@ def getModelAndTokenizer(MODEL_PATH, quantize, platform):
         model.config.pad_token_id = tokenizer.eos_token_id
 
         return model, tokenizer
+
+
+def encode_no_bos(text, tokenizer):
+    ids = tokenizer.encode(text, add_special_tokens=False)
+
+    bos_id = tokenizer.bos_token_id
+    if bos_id is not None and len(ids) > 0 and ids[0] == bos_id:
+        ids = ids[1:]
+
+    tensor = torch.tensor([ids], device="cuda")
+    attn = torch.ones_like(tensor)
+    return tensor, attn
 
 
 def split_sentences(text: str):

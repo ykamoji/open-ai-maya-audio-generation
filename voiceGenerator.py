@@ -140,6 +140,18 @@ class VoiceGenerator:
 
             if contents_to_process:
                 print(f"Need to summarize {len(contents_to_process)} pages")
+
+                if notebook_name not in self.TITLE_CACHE:
+                    self.TITLE_CACHE[notebook_name] = {}
+                elif section_name not in self.TITLE_CACHE[notebook_name]:
+                    self.TITLE_CACHE[notebook_name][section_name] = {}
+                else:
+                    for content in contents_to_process:
+                        if content['title'] not in self.TITLE_CACHE[notebook_name][section_name]:
+                            self.TITLE_CACHE[notebook_name][section_name][content['title']] = {
+                                "best": "",
+                                "suggestions": [],
+                            }
                 summarized_paragraphs = summarization(self.Args, contents_to_process, self.TITLE_CACHE)
                 if summarized_paragraphs == len(contents_to_process):
                     print(f"Summarization completed!")
