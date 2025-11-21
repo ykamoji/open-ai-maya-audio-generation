@@ -264,23 +264,34 @@ def fast_generate_sampling(
 
         # ----- 2. Repetition penalty -----
         if repetition_penalty != 1.0:
+            before = logits.clone()
             for b in range(batch_size):
                 seen = set(generated[b].tolist())
                 for t in seen:
                     val = logits[b, t]
                     logits[b, t] = val / repetition_penalty if val > 0 else val * repetition_penalty
 
+            # per-filter fallback
+            if torch.isnan(logits).any() or torch.isinf(logits).all():
+                logits = before
+
         # ----- 3. Top-k -----
         if top_k > 0:
+            before = logits.clone()
             kth_vals = torch.topk(logits, top_k, dim=-1).values[:, -1].unsqueeze(-1)
             logits = torch.where(
                 logits < kth_vals,
                 torch.full_like(logits, -float('inf')),
                 logits
             )
+            # per-filter fallback
+            if torch.isinf(logits).all() or torch.isnan(logits).any():
+                logits = before
 
         # ----- 4. Top-p (nucleus) -----
         if top_p < 1.0:
+            before = logits.clone()
+
             sorted_logits, sorted_idx = torch.sort(logits, descending=True, dim=-1)
             sorted_probs = F.softmax(sorted_logits, dim=-1)
             cumulative_probs = sorted_probs.cumsum(dim=-1)
@@ -294,6 +305,10 @@ def fast_generate_sampling(
             original = torch.empty_like(sorted_logits)
             original.scatter_(1, sorted_idx, sorted_logits)
             logits = original
+
+            # per-filter fallback
+            if torch.isinf(logits).all() or torch.isnan(logits).any():
+                logits = before
 
         # ----- 5. Sample next token -----
         probs = F.softmax(logits, dim=-1)

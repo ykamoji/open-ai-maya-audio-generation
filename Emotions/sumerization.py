@@ -130,8 +130,7 @@ def getSummaries(content, model, tokenizer):
                 temperature=0.55,
                 top_p=0.92,
                 top_k=50,
-                repetition_penalty=1.08,
-                pad_token_id=tokenizer.eos_token_id
+                repetition_penalty=1.08
             )
 
         decoded = generated[:, suffix_ids.shape[1]:]
@@ -181,8 +180,7 @@ def summarization(Args, pages, notebook_name, section_name, TITLE_CACHE):
         try:
             summary = getSummaries(page['content'], model, tokenizer)
             if summary:
-                TITLE_CACHE[notebook_name][section_name][page["title"]]["suggestions"] =\
-                    TITLE_CACHE[page['title']]["suggestions"] + summary
+                TITLE_CACHE[notebook_name][section_name][page["title"]]["suggestions"] += summary
                 updateCache('titleCache.json', TITLE_CACHE)
                 processed += 1
             else:
