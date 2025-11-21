@@ -75,8 +75,7 @@ def paragraph_stylization(model, prompts, terminators, tokenizer):
             prompts,
             return_tensors="pt",
             padding=True,
-            truncation=True,
-            max_length=tokenizer.model_max_length - 512
+            truncation=False,
         ).to('cuda')
 
         with torch.inference_mode():
@@ -90,11 +89,12 @@ def paragraph_stylization(model, prompts, terminators, tokenizer):
                 return_dict_in_generate=True
             )
 
+        prompt_len = encoded["input_ids"].shape[1]
         sequences = generated.sequences
-        prompt_lengths = encoded["attention_mask"].sum(dim=1).tolist()
-        for b, prompt_len in enumerate(prompt_lengths):
-            gen_tokens = sequences[b][prompt_len:]
-            text = tokenizer.decode(gen_tokens, skip_special_tokens=True).strip()
+        generated_content = sequences[:, prompt_len:]
+
+        for b in range(len(prompts)):
+            text = tokenizer.decode(generated_content[b], skip_special_tokens=True).strip()
             outputs.append(text)
 
     except Exception as e:
