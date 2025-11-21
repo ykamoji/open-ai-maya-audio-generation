@@ -1,6 +1,5 @@
 import torch
 import inspect
-import gc
 from tqdm import tqdm
 from Generator.utils import createChunks
 from Emotions.utils import getModelAndTokenizer
@@ -64,7 +63,8 @@ def stylize(Args, pages, VOICE_CACHE):
 
         except Exception as e:
             print(f"Error for page {page['title']}: {e}\n. Skipping...")
-
+        finally:
+            torch.cuda.empty_cache()
     return processed
 
 
@@ -101,12 +101,10 @@ def paragraph_stylization(model, prompts, terminators, tokenizer):
         print(f"Error : {e}\n.")
 
     finally:
-        for var in ["encoded", "generated", "sequences"]:
-            if var in locals():
-                del locals()[var]
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            gc.collect()
+        encoded = None
+        generated = None
+        sequences = None
+        generated_content = None
 
     return outputs
 

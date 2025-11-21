@@ -1,7 +1,6 @@
 import re
 import inspect
 import torch
-import gc
 from tqdm import tqdm
 from Emotions.utils import getModelAndTokenizer, encode_no_bos
 from utils import updateCache
@@ -142,9 +141,9 @@ def getSummaries(content, model, tokenizer):
     except Exception as e:
         print(f"Error {e}.")
     finally:
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            gc.collect()
+        decoded = None
+        generated = None
+        output = None
 
     return response
 
@@ -194,7 +193,7 @@ def summarization(Args, pages, TITLE_CACHE):
 
         except Exception as e:
             print(f"Error {e}. Skipping for {page['title']}")
-
-
+        finally:
+            torch.cuda.empty_cache()
     return processed
 

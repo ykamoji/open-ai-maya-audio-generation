@@ -88,10 +88,18 @@ class VoiceGenerator:
                 if not self.VOICE_CACHE or page["title"] not in self.VOICE_CACHE:
                     contents_to_process.append(page)
 
+            if notebook_name not in self.VOICE_CACHE:
+                self.VOICE_CACHE[notebook_name] = {}
+            elif section_name not in self.VOICE_CACHE[notebook_name]:
+                self.VOICE_CACHE[notebook_name][section_name] = {}
+            else:
+                for content in contents_to_process:
+                    if content['title'] not in self.VOICE_CACHE[notebook_name][section_name]:
+                        self.VOICE_CACHE[notebook_name][section_name][content['title']] = []
             if contents_to_process:
                 print(f"\nProcessing stylization for {notebook_name} {section_name}.")
                 print(f"Need to stylize {len(contents_to_process)} pages")
-                spell_checked_paragraphs = stylize(self.Args, contents_to_process, self.VOICE_CACHE)
+                spell_checked_paragraphs = stylize(self.Args, contents_to_process, self.VOICE_CACHE[notebook_name][section_name])
                 if spell_checked_paragraphs == len(contents_to_process):
                     print(f"Stylize completed!")
                 else:
@@ -99,43 +107,46 @@ class VoiceGenerator:
 
         if self.Args.Step >= 2:
             print(f"Starting post processing for voice texts.")
-            for key in tqdm(self.VOICE_CACHE, desc=f"Processing content"):
+            voice_cache = self.VOICE_CACHE[notebook_name][section_name]
+            for key in tqdm(voice_cache, desc=f"Processing content"):
                 split_paragraph = False
 
-                for idx, _ in enumerate(self.VOICE_CACHE[key]):
+                for idx, _ in enumerate(voice_cache[key]):
                     # Remove the prefix at the beginning.
                     for prefix in ["Here's the edited paragraph:\n\n", "Here's the revised paragraph:\n\n"]:
-                        self.VOICE_CACHE[key][idx] = self.VOICE_CACHE[key][idx].removeprefix(prefix)
+                        voice_cache[key][idx] = voice_cache[key][idx].removeprefix(prefix)
 
                     # Remove the extra details at the end.
-                    if "\n\n" in self.VOICE_CACHE[key][idx]:
+                    if "\n\n" in voice_cache[key][idx]:
                         split_paragraph = True
-                        modified_paragraphs = self.VOICE_CACHE[key][idx]
-                        for para_idx, para in enumerate(self.VOICE_CACHE[key][idx].split("\n\n")):
+                        modified_paragraphs = voice_cache[key][idx]
+                        for para_idx, para in enumerate(voice_cache[key][idx].split("\n\n")):
                             if para.startswith("I made") and ("adjustments" in para or "changes" in para):
                                 modified_paragraphs = "\n\n".join(modified_paragraphs.split('\n\n')[:para_idx])
                                 break
 
-                        self.VOICE_CACHE[key][idx] = modified_paragraphs
+                        voice_cache[key][idx] = modified_paragraphs
 
                 # Keep the list paragraph seperated,
                 if split_paragraph:
                     modified_paragraphs = []
-                    for paras in self.VOICE_CACHE[key]:
+                    for paras in voice_cache[key]:
                         parts = [part for part in paras.split("\n\n") if part.strip()]
                         modified_paragraphs.extend(parts)
-                    self.VOICE_CACHE[key] = modified_paragraphs
+                    voice_cache[key] = modified_paragraphs
 
+            self.VOICE_CACHE[notebook_name][section_name] = voice_cache
             updateCache('voiceCache.json', self.VOICE_CACHE)
             print(f"Post processing completed voice texts.")
 
         if self.Args.Step >= 3 and not self.Args.Generator.SkipTitleGeneration:
             print(f"\nStarting summarization for {notebook_name} {section_name}.")
             contents_to_process = []
-            for key in self.VOICE_CACHE:
+            voice_cache = self.VOICE_CACHE[notebook_name][section_name]
+            for key in voice_cache:
                 contents_to_process.append({
                     "title": key,
-                    "content": self.VOICE_CACHE[key],
+                    "content": voice_cache[key],
                 })
 
             if contents_to_process:
@@ -152,7 +163,7 @@ class VoiceGenerator:
                                 "best": "",
                                 "suggestions": [],
                             }
-                summarized_paragraphs = summarization(self.Args, contents_to_process, self.TITLE_CACHE)
+                summarized_paragraphs = summarization(self.Args, contents_to_process, self.TITLE_CACHE[notebook_name][section_name])
                 if summarized_paragraphs == len(contents_to_process):
                     print(f"Summarization completed!")
                 else:
