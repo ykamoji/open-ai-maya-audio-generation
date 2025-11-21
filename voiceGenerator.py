@@ -84,22 +84,22 @@ class VoiceGenerator:
 
         if self.Args.Step >= 1:
             contents_to_process = []
+
+            nb_cache = self.VOICE_CACHE.setdefault(notebook_name, {})
+            sec_cache = nb_cache.setdefault(section_name, {})
+
             for page in pages[:limit]:
-                if not self.VOICE_CACHE or page["title"] not in self.VOICE_CACHE:
+                if page["title"] not in sec_cache:
                     contents_to_process.append(page)
 
-            if notebook_name not in self.VOICE_CACHE:
-                self.VOICE_CACHE[notebook_name] = {}
-            elif section_name not in self.VOICE_CACHE[notebook_name]:
-                self.VOICE_CACHE[notebook_name][section_name] = {}
-            else:
-                for content in contents_to_process:
-                    if content['title'] not in self.VOICE_CACHE[notebook_name][section_name]:
-                        self.VOICE_CACHE[notebook_name][section_name][content['title']] = []
+            for content in contents_to_process:
+                sec_cache.setdefault(content["title"], [])
+
             if contents_to_process:
                 print(f"\nProcessing stylization for {notebook_name} {section_name}.")
                 print(f"Need to stylize {len(contents_to_process)} pages")
-                spell_checked_paragraphs = stylize(self.Args, contents_to_process, self.VOICE_CACHE[notebook_name][section_name])
+                spell_checked_paragraphs = stylize(self.Args, contents_to_process, sec_cache)
+                self.VOICE_CACHE[notebook_name][section_name] = sec_cache
                 if spell_checked_paragraphs == len(contents_to_process):
                     print(f"Stylize completed!")
                 else:
@@ -110,30 +110,37 @@ class VoiceGenerator:
             voice_cache = self.VOICE_CACHE[notebook_name][section_name]
             for key in tqdm(voice_cache, desc=f"Processing content"):
                 split_paragraph = False
-
-                for idx, _ in enumerate(voice_cache[key]):
+                cleaned_paragraphs = []
+                for idx, paragraph in enumerate(voice_cache[key]):
                     # Remove the prefix at the beginning.
                     for prefix in ["Here's the edited paragraph:\n\n", "Here's the revised paragraph:\n\n"]:
-                        voice_cache[key][idx] = voice_cache[key][idx].removeprefix(prefix)
+                        paragraph = paragraph.removeprefix(prefix)
 
                     # Remove the extra details at the end.
-                    if "\n\n" in voice_cache[key][idx]:
-                        split_paragraph = True
-                        modified_paragraphs = voice_cache[key][idx]
-                        for para_idx, para in enumerate(voice_cache[key][idx].split("\n\n")):
-                            if para.startswith("I made") and ("adjustments" in para or "changes" in para):
-                                modified_paragraphs = "\n\n".join(modified_paragraphs.split('\n\n')[:para_idx])
+                    if "\n\n" in paragraph:
+                        parts = paragraph.split("\n\n")
+                        for i, p in enumerate(parts):
+                            if p.startswith("I made") and ("adjustments" in p or "changes" in p):
+                                parts = parts[:i]
                                 break
+                        paragraph = "\n\n".join(parts)
 
-                        voice_cache[key][idx] = modified_paragraphs
+                    if "\n\n" in paragraph:
+                        split_paragraph = True
+
+                    cleaned_paragraphs.append(paragraph)
 
                 # Keep the list paragraph seperated,
                 if split_paragraph:
-                    modified_paragraphs = []
-                    for paras in voice_cache[key]:
-                        parts = [part for part in paras.split("\n\n") if part.strip()]
-                        modified_paragraphs.extend(parts)
-                    voice_cache[key] = modified_paragraphs
+                    final_paragraphs = []
+                    for p in cleaned_paragraphs:
+                        for block in p.split("\n\n"):
+                            block = block.strip()
+                            if block:
+                                final_paragraphs.append(block)
+                    voice_cache[key] = final_paragraphs
+                else:
+                    voice_cache[key] = cleaned_paragraphs
 
             self.VOICE_CACHE[notebook_name][section_name] = voice_cache
             updateCache('voiceCache.json', self.VOICE_CACHE)
@@ -151,19 +158,16 @@ class VoiceGenerator:
 
             if contents_to_process:
                 print(f"Need to summarize {len(contents_to_process)} pages")
-
-                if notebook_name not in self.TITLE_CACHE:
-                    self.TITLE_CACHE[notebook_name] = {}
-                elif section_name not in self.TITLE_CACHE[notebook_name]:
-                    self.TITLE_CACHE[notebook_name][section_name] = {}
-                else:
-                    for content in contents_to_process:
-                        if content['title'] not in self.TITLE_CACHE[notebook_name][section_name]:
-                            self.TITLE_CACHE[notebook_name][section_name][content['title']] = {
-                                "best": "",
-                                "suggestions": [],
-                            }
-                summarized_paragraphs = summarization(self.Args, contents_to_process, self.TITLE_CACHE[notebook_name][section_name])
+                nb_cache = self.TITLE_CACHE.setdefault(notebook_name, {})
+                sec_cache = nb_cache.setdefault(section_name, {})
+                for content in contents_to_process:
+                    if content['title'] not in sec_cache:
+                        sec_cache[content['title']] = {
+                            "best": "",
+                            "suggestions": [],
+                        }
+                summarized_paragraphs = summarization(self.Args, contents_to_process, sec_cache)
+                self.TITLE_CACHE[notebook_name][section_name] = sec_cache
                 if summarized_paragraphs == len(contents_to_process):
                     print(f"Summarization completed!")
                 else:
