@@ -159,7 +159,7 @@ def extractSuggestions(output):
     return titles
 
 
-def summarization(Args, pages, TITLE_CACHE):
+def summarization(Args, pages, notebook_name, section_name, TITLE_CACHE):
 
     MODEL_PATH = Args.Emotions.ModelPath.__dict__[Args.Platform]
 
@@ -183,7 +183,8 @@ def summarization(Args, pages, TITLE_CACHE):
         try:
             summary = getSummaries(page['content'], model, tokenizer)
             if summary:
-                TITLE_CACHE[page['title']]['suggestions'] = TITLE_CACHE[page['title']]["suggestions"] + summary
+                TITLE_CACHE[notebook_name][section_name][page["title"]]["suggestions"] =\
+                    TITLE_CACHE[page['title']]["suggestions"] + summary
                 updateCache('titleCache.json', TITLE_CACHE)
                 processed += 1
             else:

@@ -619,7 +619,7 @@ def process_page(lines, model, tokenizer):
     return emotion_lines + [" "]
 
 
-def addEmotions(Args, pages, EMOTION_CACHE):
+def addEmotions(Args, pages, notebook_name, section_name, EMOTION_CACHE):
     MODEL_PATH = Args.Emotions.ModelPath.__dict__[Args.Platform]
 
     model, tokenizer = getModelAndTokenizer(MODEL_PATH, Args.Emotions.Quantize, Args.Platform)
@@ -638,7 +638,7 @@ def addEmotions(Args, pages, EMOTION_CACHE):
             outputs.extend(process_page(lines, model, tokenizer))
             if outputs:
                 outputs.insert(0, page['suggested_title'])
-                EMOTION_CACHE[page["title"]] = outputs
+                EMOTION_CACHE[notebook_name][section_name][page["title"]] = outputs
                 updateCache('emotionCache.json', EMOTION_CACHE)
                 progress += 1
                 logger.info(f"Completed {page['title']}.")

@@ -56,7 +56,7 @@ def build_system_prefix_cache(model, tokenizer):
     return static_ids, static_mask, static_past
 
 
-def stylize(Args, pages, VOICE_CACHE):
+def stylize(Args, pages, notebook_name, section_name, VOICE_CACHE):
     MODEL_PATH = Args.Emotions.ModelPath.__dict__[Args.Platform]
 
     model, tokenizer = getModelAndTokenizer(MODEL_PATH, Args.Emotions.Quantize, Args.Platform)
@@ -70,7 +70,7 @@ def stylize(Args, pages, VOICE_CACHE):
         try:
             chunks = createChunks(content, limit=3000)
 
-            BATCH_SIZE = min(45, len(chunks))
+            BATCH_SIZE = min(20, len(chunks))
 
             prompts = generate_prompts(chunks, tokenizer)
             outputs = []
@@ -82,7 +82,7 @@ def stylize(Args, pages, VOICE_CACHE):
 
             # Save the page generated
             if outputs:
-                VOICE_CACHE[page["title"]] = outputs
+                VOICE_CACHE[notebook_name][section_name][page["title"]] = outputs
                 updateCache('voiceCache.json', VOICE_CACHE)
                 processed += 1
 
