@@ -2,7 +2,7 @@ import re
 import inspect
 import torch
 from tqdm import tqdm
-from Emotions.utils import getModelAndTokenizer, encode_no_bos, fast_generate_sampling
+from Emotions.utils import getModelAndTokenizer, encode_no_bos, fast_generate_sampling, clear_cache
 from utils import updateCache
 
 PROMPT_PREFIX = inspect.cleandoc(f"""
@@ -161,9 +161,7 @@ def extractSuggestions(output):
 
 def summarization(Args, pages, notebook_name, section_name, TITLE_CACHE):
 
-    MODEL_PATH = Args.Emotions.ModelPath.__dict__[Args.Platform]
-
-    model, tokenizer = getModelAndTokenizer(MODEL_PATH, Args.Emotions.Quantize, Args.Platform)
+    model, tokenizer = getModelAndTokenizer(Args)
 
     global PREFIX_KV_CACHE, PREFIX_ATTN
     prefix_ids, prefix_attn = encode_no_bos(PROMPT_PREFIX, tokenizer, model.device)
@@ -193,6 +191,7 @@ def summarization(Args, pages, notebook_name, section_name, TITLE_CACHE):
         except Exception as e:
             print(f"Error {e}. Skipping for {page['title']}")
 
-        torch.cuda.empty_cache()
+        clear_cache()
+
     return processed
 

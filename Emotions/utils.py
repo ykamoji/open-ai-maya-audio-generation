@@ -13,7 +13,30 @@ sentence_regex = re.compile(
 )
 
 
-def getModelAndTokenizer(MODEL_PATH, quantize, platform):
+def getDevice():
+    device = "cpu"
+    if torch.cuda.is_available():
+        device = "cuda"
+    elif torch.backends.mps.is_available():
+        device = "mps"
+
+    return device
+
+
+def clear_cache():
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    elif torch.backends.mps.is_available():
+        torch.mps.empty_cache()
+
+
+def getModelAndTokenizer(Args):
+
+    MODEL_PATH = Args.Emotions.ModelPath.__dict__[Args.Platform]
+    MADEL_NAME = Args.Emotions.ModelName
+
+    quantize, platform = Args.Emotions.Quantize, Args.Platform
+
     if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
         DTYPE = torch.bfloat16
     else:
@@ -30,7 +53,7 @@ def getModelAndTokenizer(MODEL_PATH, quantize, platform):
         )
 
     model = AutoModelForCausalLM.from_pretrained(
-        "meta-llama/Llama-3.1-8B-Instruct" if platform != 'Kaggle' else "/kaggle/input/llama-3-1-8b-instruct/transformers/1/1/Model",
+        MADEL_NAME if platform != 'Kaggle' else "/kaggle/input/llama-3-1-8b-instruct/transformers/1/1/Model",
         cache_dir=MODEL_PATH,
         quantization_config=bnb_config,
         device_map="balanced",
@@ -44,7 +67,7 @@ def getModelAndTokenizer(MODEL_PATH, quantize, platform):
     model.generation_config.return_legacy_cache = True
 
     tokenizer = AutoTokenizer.from_pretrained(
-        "meta-llama/Llama-3.1-8B-Instruct" if platform != 'Kaggle' else "/kaggle/input/llama-3-1-8b-instruct/transformers/1/1/Tokenizer",
+        MADEL_NAME if platform != 'Kaggle' else "/kaggle/input/llama-3-1-8b-instruct/transformers/1/1/Tokenizer",
         use_fast=True,
         padding_side="left",
         cache_dir=MODEL_PATH)

@@ -2,7 +2,7 @@ import torch
 import inspect
 from tqdm import tqdm
 from Generator.utils import createChunks
-from Emotions.utils import getModelAndTokenizer, fast_generate, repeat_past_kv
+from Emotions.utils import getModelAndTokenizer, fast_generate, repeat_past_kv, getDevice, clear_cache
 from utils import updateCache
 import warnings
 from transformers.utils import logging
@@ -40,7 +40,7 @@ def build_system_prefix_cache(model, tokenizer):
         tokenize=False,
     )
 
-    enc = tokenizer(prompt, return_tensors="pt").to("cuda")
+    enc = tokenizer(prompt, return_tensors="pt").to(getDevice())
 
     with torch.inference_mode():
         out = model(
@@ -57,9 +57,8 @@ def build_system_prefix_cache(model, tokenizer):
 
 
 def stylize(Args, pages, notebook_name, section_name, VOICE_CACHE):
-    MODEL_PATH = Args.Emotions.ModelPath.__dict__[Args.Platform]
 
-    model, tokenizer = getModelAndTokenizer(MODEL_PATH, Args.Emotions.Quantize, Args.Platform)
+    model, tokenizer = getModelAndTokenizer(Args)
     terminators = [tokenizer.eos_token_id]
 
     static_ids, static_mask, static_past = build_system_prefix_cache(model, tokenizer)
@@ -89,7 +88,7 @@ def stylize(Args, pages, notebook_name, section_name, VOICE_CACHE):
         except Exception as e:
             print(f"Error for page {page['title']}: {e}\n. Skipping...")
 
-        torch.cuda.empty_cache()
+        clear_cache()
     return processed
 
 

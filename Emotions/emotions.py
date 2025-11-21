@@ -8,7 +8,7 @@ import pandas as pd
 from tqdm import tqdm
 from collections import Counter, deque
 from Emotions.toneReRanker import rerank
-from Emotions.utils import getModelAndTokenizer, split_sentences, fast_generate, repeat_past_kv
+from Emotions.utils import getModelAndTokenizer, split_sentences, fast_generate, repeat_past_kv, getDevice, clear_cache
 from utils import updateCache
 
 if os.path.isfile('emotions.log'):
@@ -328,7 +328,7 @@ def detect_and_rank_batch(indices, sentences, model, tokenizer, chunk_size: int 
                 logger.error(f"Exception while parsing tags: {e}")
                 outputs[indices.index(idx)] = []
 
-        torch.cuda.empty_cache()
+        clear_cache()
 
     return outputs
 
@@ -421,7 +421,7 @@ def get_static_placement_cache(tag, tokenizer, model):
     # Build the text with TAG inserted
     text = PLACEMENT_PREFIX.replace("<TAG>", tag)
 
-    enc = tokenizer(text, return_tensors="pt").to("cuda")
+    enc = tokenizer(text, return_tensors="pt").to(getDevice())
 
     with torch.inference_mode():
         out = model(
@@ -546,7 +546,7 @@ def insert_emotion_tag(sentences, tags, model, tokenizer):
         out_ids = None
         gen_only = None
 
-    torch.cuda.empty_cache()
+    clear_cache()
     return modified_lines
 
 
@@ -620,9 +620,8 @@ def process_page(lines, model, tokenizer):
 
 
 def addEmotions(Args, pages, notebook_name, section_name, EMOTION_CACHE):
-    MODEL_PATH = Args.Emotions.ModelPath.__dict__[Args.Platform]
 
-    model, tokenizer = getModelAndTokenizer(MODEL_PATH, Args.Emotions.Quantize, Args.Platform)
+    model, tokenizer = getModelAndTokenizer(Args)
 
     global global_tag_counts
     progress = 0

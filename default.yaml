@@ -6,12 +6,13 @@ Graph:
   PageLimit:  # number(s) or empty
 Emotions:
   Quantize: False
+  ModelName: meta-llama/Llama-3.1-8B-Instruct # meta-llama/Llama-3.2-1B-Instruct
   ModelPath:
     Default: /Users/ykamoji/Documents/open-ai-maya-audio-generation/models/
     Kaggle: # For Kaggle, use internal cache
     Colab: /content/open-ai-maya-audio-generation/Models/
 Generator:
-  PageLimit:  4 # number(s) or empty
+  PageLimit:  1 # number(s) or empty
   PageNo:
   SkipTitleGeneration: False
   AudioOutputPath:

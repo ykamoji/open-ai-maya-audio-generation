@@ -97,8 +97,7 @@ class VoiceGenerator:
             if contents_to_process:
                 print(f"\nProcessing stylization for {notebook_name} {section_name}.")
                 print(f"Need to stylize {len(contents_to_process)} pages")
-                spell_checked_paragraphs = stylize(self.Args, contents_to_process, notebook_name, section_name, nb_cache)
-                self.VOICE_CACHE = nb_cache
+                spell_checked_paragraphs = stylize(self.Args, contents_to_process, notebook_name, section_name, self.VOICE_CACHE)
                 if spell_checked_paragraphs == len(contents_to_process):
                     print(f"Stylize completed!")
                 else:
@@ -166,8 +165,7 @@ class VoiceGenerator:
                             "best": "",
                             "suggestions": [],
                         }
-                summarized_paragraphs = summarization(self.Args, contents_to_process, notebook_name, section_name, nb_cache)
-                self.TITLE_CACHE = nb_cache
+                summarized_paragraphs = summarization(self.Args, contents_to_process, notebook_name, section_name, self.TITLE_CACHE)
                 if summarized_paragraphs == len(contents_to_process):
                     print(f"Summarization completed!")
                 else:
@@ -189,8 +187,7 @@ class VoiceGenerator:
                         })
             if contents_to_process:
                 print(f"Need to add emotions to {len(contents_to_process)} pages")
-                emotion_paragraphs = addEmotions(self.Args, contents_to_process, notebook_name, section_name, nb_cache)
-                self.EMOTION_CACHE = nb_cache
+                emotion_paragraphs = addEmotions(self.Args, contents_to_process, notebook_name, section_name, self.EMOTION_CACHE)
                 if emotion_paragraphs == len(contents_to_process):
                     print(f"Emotion adding completed!")
                 else:
