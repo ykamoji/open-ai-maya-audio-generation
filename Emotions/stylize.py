@@ -13,13 +13,12 @@ logging.set_verbosity_error()
 
 SYSTEM_PROMPT = inspect.cleandoc("""
 You are a professional editor preparing manuscripts for audiobook narration. Your task is to refine the paragraph to improve clarity, rhythm, 
-and spoken-flow readability without changing meaning, factual content, or specificity level.
+and spoken-flow readability while maintaining all story details and staying true to the author’s voice.
 
 Very important Guidelines:
 - Preserve the emotional intent, atmosphere, and style of the writing.
 - Maintain the pacing and dramatic beats of the scene.
 - Keep character voice, tone, and attitude unchanged.
-- Do not add, remove, reinterpret, or infer new information.
 - Correct grammar, sentence structure, punctuation, and word only where it 
   enhances clarity or improves how the text sounds when read aloud.
 - If the author uses vague or informal language (e.g., "stuff","things","somewhere"), keep it vague. 
