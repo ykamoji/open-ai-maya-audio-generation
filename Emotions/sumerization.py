@@ -127,7 +127,7 @@ def getSummaries(content, model, tokenizer):
                 input_ids=suffix_ids,
                 attention_mask=full_attn,
                 past_key_values=PREFIX_KV_CACHE,
-                max_new_tokens=700,
+                max_new_tokens=150,
                 temperature=0.55,
                 top_p=0.92,
                 top_k=50,
@@ -141,6 +141,10 @@ def getSummaries(content, model, tokenizer):
         response = extractSuggestions(output)
     except Exception as e:
         print(f"Error {e}.")
+    finally:
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            gc.collect()
 
     return response
 
@@ -190,9 +194,7 @@ def summarization(Args, pages, TITLE_CACHE):
 
         except Exception as e:
             print(f"Error {e}. Skipping for {page['title']}")
-        finally:
-            torch.cuda.empty_cache()
-            gc.collect()
+
 
     return processed
 

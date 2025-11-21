@@ -1,4 +1,6 @@
 import torch
+import inspect
+import gc
 from tqdm import tqdm
 from Generator.utils import createChunks
 from Emotions.utils import getModelAndTokenizer
@@ -10,7 +12,7 @@ warnings.filterwarnings("ignore")
 logging.set_verbosity_error()
 
 
-SYSTEM_PROMPT = """
+SYSTEM_PROMPT = inspect.cleandoc("""
 You are a professional editor preparing manuscripts for audiobook narration. Your task is to refine the paragraph to improve clarity, rhythm, 
 and spoken-flow readability without changing meaning, factual content, or specificity level.
 
@@ -30,7 +32,7 @@ Very important Guidelines:
 - Do not over-polish or make the prose sound generic or mechanical.
 
 Return only the edited paragraph, clean and ready for audiobook production.
-""".strip()
+""")
 
 
 def stylize(Args, pages, VOICE_CACHE):
@@ -38,21 +40,15 @@ def stylize(Args, pages, VOICE_CACHE):
 
     model, tokenizer = getModelAndTokenizer(MODEL_PATH, Args.Emotions.Quantize, Args.Platform)
 
-    terminators = [
-        tokenizer.eos_token_id,
-        tokenizer.convert_tokens_to_ids("<|eot_id|>")
-    ]
+    terminators = [tokenizer.eos_token_id]
 
     processed = 0
     for page in tqdm(pages, desc="Pages", ncols=100):
         content = page['content']
         try:
-            chunks = createChunks(content, limit=5000)
+            chunks = createChunks(content, limit=3000)
 
-            if len(chunks) > 45:
-                BATCH_SIZE = 45
-            else:
-                BATCH_SIZE = len(chunks)
+            BATCH_SIZE = min(45, len(chunks))
 
             prompts = generate_prompts(chunks, tokenizer)
             outputs = []
@@ -68,8 +64,6 @@ def stylize(Args, pages, VOICE_CACHE):
 
         except Exception as e:
             print(f"Error for page {page['title']}: {e}\n. Skipping...")
-        finally:
-            torch.cuda.empty_cache()
 
     return processed
 
@@ -81,7 +75,8 @@ def paragraph_stylization(model, prompts, terminators, tokenizer):
             prompts,
             return_tensors="pt",
             padding=True,
-            truncation=False,
+            truncation=True,
+            max_length=tokenizer.model_max_length - 512
         ).to('cuda')
 
         with torch.inference_mode():
@@ -92,23 +87,26 @@ def paragraph_stylization(model, prompts, terminators, tokenizer):
                 do_sample=False,
                 eos_token_id=terminators,
                 pad_token_id=tokenizer.eos_token_id,
-                return_dict_in_generate=True,
-                return_legacy_cache=True
+                return_dict_in_generate=True
             )
 
-        prompt_len = encoded["input_ids"].shape[1]
         sequences = generated.sequences
-        generated_content = sequences[:, prompt_len:]
-
-        for b in range(len(prompts)):
-            text = tokenizer.decode(generated_content[b], skip_special_tokens=True).strip()
+        prompt_lengths = encoded["attention_mask"].sum(dim=1).tolist()
+        for b, prompt_len in enumerate(prompt_lengths):
+            gen_tokens = sequences[b][prompt_len:]
+            text = tokenizer.decode(gen_tokens, skip_special_tokens=True).strip()
             outputs.append(text)
 
     except Exception as e:
         print(f"Error : {e}\n.")
 
     finally:
-        del encoded, generated, sequences, generated_content
+        for var in ["encoded", "generated", "sequences"]:
+            if var in locals():
+                del locals()[var]
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            gc.collect()
 
     return outputs
 
