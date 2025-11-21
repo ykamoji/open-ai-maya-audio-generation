@@ -1,6 +1,7 @@
 import re
 import inspect
 import torch
+import gc
 from tqdm import tqdm
 from Emotions.utils import getModelAndTokenizer, encode_no_bos
 from utils import updateCache
@@ -116,14 +117,15 @@ def getSummaries(content, model, tokenizer):
 
     response = []
     try:
-        suffix_ids, suffix_attn = encode_no_bos(build_prompt(content), tokenizer)
+        suffix_ids, suffix_attn = encode_no_bos(build_prompt(content), tokenizer, model.device)
         if suffix_attn.shape[1] == 0:
             suffix_attn = torch.ones((1, 1), device=suffix_attn.device)
             suffix_ids = torch.full((1, 1), tokenizer.eos_token_id, device=suffix_ids.device)
+        full_attn = torch.cat([PREFIX_ATTN, suffix_attn], dim=1)
         with torch.inference_mode():
             generated = model.generate(
                 input_ids=suffix_ids,
-                attention_mask=suffix_attn,
+                attention_mask=full_attn,
                 past_key_values=PREFIX_KV_CACHE,
                 max_new_tokens=700,
                 temperature=0.55,
@@ -139,8 +141,6 @@ def getSummaries(content, model, tokenizer):
         response = extractSuggestions(output)
     except Exception as e:
         print(f"Error {e}.")
-    finally:
-        decoded = generated = suffix_ids = suffix_attn = output = None
 
     return response
 
@@ -164,7 +164,7 @@ def summarization(Args, pages, TITLE_CACHE):
     model, tokenizer = getModelAndTokenizer(MODEL_PATH, Args.Emotions.Quantize, Args.Platform)
 
     global PREFIX_KV_CACHE, PREFIX_LEN, PREFIX_ATTN
-    prefix_ids, prefix_attn = encode_no_bos(PROMPT_PREFIX, tokenizer)
+    prefix_ids, prefix_attn = encode_no_bos(PROMPT_PREFIX, tokenizer, model.device)
     PREFIX_LEN = prefix_ids.shape[1]
     PREFIX_ATTN = prefix_attn
 
@@ -192,6 +192,7 @@ def summarization(Args, pages, TITLE_CACHE):
             print(f"Error {e}. Skipping for {page['title']}")
         finally:
             torch.cuda.empty_cache()
+            gc.collect()
 
     return processed
 

@@ -67,14 +67,14 @@ def getModelAndTokenizer(MODEL_PATH, quantize, platform):
         return model, tokenizer
 
 
-def encode_no_bos(text, tokenizer):
+def encode_no_bos(text, tokenizer, device):
     ids = tokenizer.encode(text, add_special_tokens=False)
 
     bos_id = tokenizer.bos_token_id
     if bos_id is not None and len(ids) > 0 and ids[0] == bos_id:
         ids = ids[1:]
 
-    tensor = torch.tensor([ids], device="cuda")
+    tensor = torch.tensor([ids], device=device)
     attn = torch.ones_like(tensor)
     return tensor, attn
 
