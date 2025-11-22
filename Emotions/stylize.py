@@ -53,13 +53,13 @@ def stylize(Args, pages, notebook_name, section_name, VOICE_CACHE):
 
     static_ids, static_mask, static_past = build_system_prefix_cache(model, tokenizer)
 
-    BATCH_SIZE = 2
+    BATCH_SIZE = 20
     past_batch = repeat_past_kv(static_past, BATCH_SIZE)
     processed = 0
     for page in tqdm(pages, desc="Pages", ncols=100, position=0):
         content = page['content']
         try:
-            chunks = createChunks(content, limit=2000)[:4]
+            chunks = createChunks(content, limit=2000)
             prompts = generate_prompts(chunks)
             outputs = paragraph_stylization(model, prompts, terminators, tokenizer, static_mask, past_batch, BATCH_SIZE)
 
