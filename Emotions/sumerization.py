@@ -113,7 +113,7 @@ def getSummaries(content, model, tokenizer):
     content = "\n\n".join(content)
     content = clean_content(content)
 
-    response = []
+    response = set()
     try:
         suffix_ids, suffix_attn = encode_no_bos(build_prompt(content), tokenizer, model.device)
         if suffix_attn.shape[1] == 0:
@@ -147,12 +147,12 @@ def getSummaries(content, model, tokenizer):
 
 
 def extractSuggestions(output):
-    titles = []
+    titles = set()
     for line in output.splitlines():
         match = re.match(r'\s*(\d+)\.\s+(.*)', line)
         if match:
             title = match.group(2).strip()
-            titles.append(title)
+            titles.add(title)
         if len(titles) >= 10:
             break
     return titles
@@ -180,7 +180,11 @@ def summarization(Args, pages, notebook_name, section_name, TITLE_CACHE):
         try:
             summary = getSummaries(page['content'], model, tokenizer)
             if summary:
-                TITLE_CACHE[notebook_name][section_name][page["title"]]["suggestions"] += summary
+                content = TITLE_CACHE[notebook_name][section_name][page["title"]]
+                content["suggestions"] = set(content.get("suggestions", []))
+                content["suggestions"] |= summary
+                content["suggestions"] = list(content["suggestions"])
+                content["suggestions"].sort()
                 updateCache('titleCache.json', TITLE_CACHE)
                 processed += 1
             else:

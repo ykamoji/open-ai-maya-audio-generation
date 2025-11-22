@@ -7,8 +7,8 @@ import re
 import argparse
 import soundfile as sf
 import numpy as np
-from tqdm import tqdm
 
+from Emotions.postProcess import voice_post_process
 from Emotions.sumerization import summarization
 from utils import create_or_load_Cache
 from Emotions.stylize import stylize
@@ -96,7 +96,7 @@ class VoiceGenerator:
 
             if contents_to_process:
                 print(f"\nProcessing stylization for {notebook_name} {section_name}.")
-                print(f"Need to stylize {len(contents_to_process)} pages")
+                print(f"Need to stylize {len(contents_to_process)} page(s)")
                 spell_checked_paragraphs = stylize(self.Args, contents_to_process, notebook_name, section_name, self.VOICE_CACHE)
                 if spell_checked_paragraphs == len(contents_to_process):
                     print(f"Stylize completed!")
@@ -106,42 +106,7 @@ class VoiceGenerator:
         if self.Args.Step >= 2:
             print(f"Starting post processing for voice texts.")
             voice_cache = self.VOICE_CACHE[notebook_name][section_name]
-            post_process_paragraphs = {}
-            for key in tqdm(voice_cache, desc=f"Processing content"):
-                split_paragraph = False
-                cleaned_paragraphs = []
-                for paragraph in voice_cache[key]:
-                    # Remove the prefix at the beginning.
-                    for prefix in ["Here's the edited paragraph:\n\n", "Here's the revised paragraph:\n\n"]:
-                        paragraph = paragraph.removeprefix(prefix)
-
-                    # Remove the extra details at the end.
-                    if "\n\n" in paragraph:
-                        parts = paragraph.split("\n\n")
-                        for i, p in enumerate(parts):
-                            if p.startswith("I made") and ("adjustments" in p or "changes" in p):
-                                parts = parts[:i]
-                                break
-                        paragraph = "\n\n".join(parts)
-
-                    if "\n\n" in paragraph:
-                        split_paragraph = True
-
-                    cleaned_paragraphs.append(paragraph)
-
-                # Keep the list paragraph seperated,
-                if split_paragraph:
-                    final_paragraphs = []
-                    for p in cleaned_paragraphs:
-                        for block in p.split("\n\n"):
-                            block = block.strip()
-                            if block:
-                                final_paragraphs.append(block)
-                    cleaned_paragraphs = final_paragraphs
-
-                post_process_paragraphs[key] = cleaned_paragraphs
-
-            self.VOICE_CACHE[notebook_name][section_name] = post_process_paragraphs
+            self.VOICE_CACHE[notebook_name][section_name] = voice_post_process(voice_cache)
             updateCache('voiceCache.json', self.VOICE_CACHE)
             print(f"Post processing completed voice texts.")
 
@@ -156,14 +121,14 @@ class VoiceGenerator:
                 })
 
             if contents_to_process:
-                print(f"Need to summarize {len(contents_to_process)} pages")
+                print(f"Need to summarize {len(contents_to_process)} page(s)")
                 nb_cache = self.TITLE_CACHE.setdefault(notebook_name, {})
                 sec_cache = nb_cache.setdefault(section_name, {})
                 for content in contents_to_process:
                     if content['title'] not in sec_cache:
                         sec_cache[content['title']] = {
                             "best": "",
-                            "suggestions": [],
+                            "suggestions": set(),
                         }
                 summarized_paragraphs = summarization(self.Args, contents_to_process, notebook_name, section_name, self.TITLE_CACHE)
                 if summarized_paragraphs == len(contents_to_process):
@@ -186,7 +151,7 @@ class VoiceGenerator:
                             "content": voice_cache[page["title"]]
                         })
             if contents_to_process:
-                print(f"Need to add emotions to {len(contents_to_process)} pages")
+                print(f"Need to add emotions to {len(contents_to_process)} page(s)")
                 emotion_paragraphs = addEmotions(self.Args, contents_to_process, notebook_name, section_name, self.EMOTION_CACHE)
                 if emotion_paragraphs == len(contents_to_process):
                     print(f"Emotion adding completed!")
