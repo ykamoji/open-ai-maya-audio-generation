@@ -1,0 +1,928 @@
+{
+  "MACRO_PATTERNS": {
+    "MICRO_TENSION": [
+      "muscles?\\s+tightened",
+      "body\\s+went\\s+rigid",
+      "held\\s+himself\\s+still",
+      "held\\s+herself\\s+still",
+      "froze\\s+in\\s+place"
+    ],
+    "EYE_FLICKER": [
+      "eyes?\\s+flicked",
+      "eyes?\\s+danced",
+      "eyes?\\s+shifted\\s+quickly"
+    ],
+    "BREATH_PATTERN_SHIFT": [
+      "breath\\s+caught",
+      "breath\\s+hitched",
+      "breathing\\s+changed"
+    ],
+
+    "GAZE_DOWNWARD": [
+      "look(ed|ing)?\\s+down",
+      "lower(ed|ing)?\\s+(his|her|their)?\\s*(eyes|gaze)",
+      "glanc(ed|ing)?\\s+(down|away)",
+      "stared?\\s+(at\\s+the\\s+floor|at\\s+the\\s+ground|down)"
+    ],
+    "POSTURE_DROP": [
+      "shoulders?\\s+(slump|slumped|droop|drooped|lower|lowered)",
+      "posture\\s+(slackened|loosened|fell)",
+      "(body|stance)\\s+(lowered|sank)"
+    ],
+    "VOICE_SOFTENING": [
+      "voice\\s+(softened|lowered|faded)",
+      "tone\\s+(softened|quieted)",
+      "words?\\s+(trailed|trailing)"
+    ],
+    "BREATH_CHANGE": [
+      "breath\\s+(softened|faltered|slipped)",
+      "exhal(ed|ing)?\\s+softly"
+    ],
+    "MOVEMENT_SLOWING": [
+      "slow(ed|ing)?\\b",
+      "hesitat(ed|ing)?\\b",
+      "halt(ed|ing)?\\b",
+      "paus(ed|ing)?\\b"
+    ],
+    "ENERGY_DROOP": [
+      "energy\\s+drained",
+      "looked\\s+defeated",
+      "emotion\\s+seeped\\s+out"
+    ],
+
+    "SUDDEN_INHALE": [
+      "inhale(d|s|ing)?\\s+sharply",
+      "sharp\\s+breath",
+      "breath\\s+hitched",
+      "drew\\s+in\\s+a\\s+sharp\\s+breath"
+    ],
+    "FREEZE_RESPONSE": [
+      "froze",
+      "went\\s+still",
+      "stiffened",
+      "stopped\\s+dead"
+    ],
+    "EYES_WIDEN": [
+      "eyes?\\s+widen(ed|ing)?",
+      "eyes?\\s+snapped\\s+wide"
+    ],
+    "STARTLE_MOVEMENT": [
+      "jerk(ed|ing)?\\b",
+      "jerked\\s+back",
+      "stumbled?"
+    ],
+    "SHOCK_RECOIL": [
+      "jerked\\s+back",
+      "stumbled\\s+back",
+      "mouth\\s+fell\\s+open"
+    ],
+
+    "ENERGY_RISING": [
+      "energy\\s+(rose|rising|built)",
+      "buzz(ing)?",
+      "alive\\s+with"
+    ],
+    "FAST_MOVEMENT": [
+      "quick(en(ed|ing))?",
+      "rapid\\s+movement",
+      "hurried\\s+steps?"
+    ],
+    "VOICE_RISING": [
+      "voice\\s+(rose|rising|louder)",
+      "words?\\s+tumbled\\s+out",
+      "voice\\s+sped\\s+up"
+    ],
+    "FORWARD_LEANING_POSTURE": [
+      "lean(ed|ing)?\\s+forward",
+      "on\\s+the\\s+edge\\s+of\\s+(his|her|their)\\s+seat"
+    ],
+    "HIGH_ENERGY_MOVEMENT": [
+      "nearly\\s+bounced",
+      "couldn'?t\\s+stay\\s+still",
+      "shifted\\s+from\\s+foot\\s+to\\s+foot"
+    ],
+    "VOCAL_RAPIDITY": [
+      "words?\\s+spilled\\s+out",
+      "talk(ed|ing)?\\s+too\\s+fast"
+    ],
+    "CROWD_EXCITEMENT": [
+      "cheer(s|ed)?",
+      "cheers?\\s+of\\s+the\\s+crowd",
+      "cheers?\\s+rose",
+      "a\\s+roar\\s+went\\s+up",
+      "applause\\s+erupted",
+      "stands?\\s+erupted",
+      "chant(ing)?\\s+from\\s+the\\s+crowd"
+    ],
+
+    "JAW_CLENCH": [
+      "jaw\\s+(tightened|clenched|set|locked)"
+    ],
+    "VOICE_SHARPNESS": [
+      "sharp\\s+tone",
+      "tense\\s+voice",
+      "words?\\s+clipped",
+      "voice\\s+came\\s+out\\s+sharp"
+    ],
+    "AGGRESSIVE_MOVEMENT": [
+      "slam(med|ming)?",
+      "stomp(ed|ing)?",
+      "hand\\s+shot\\s+out"
+    ],
+    "EYE_HARDENING": [
+      "eyes?\\s+(hardened|narrowed|sharpened)",
+      "stare\\s+went\\s+cold"
+    ],
+    "HAND_TENSION": [
+      "hands?\\s+curled\\s+into\\s+fists?",
+      "white\\s*knuckled",
+      "fingers?\\s+dug\\s+in"
+    ],
+    "FORWARD_AGGRESSION": [
+      "stepped\\s+forward\\s+sharply",
+      "leaned\\s+forward\\s+aggressively",
+      "closed\\s+the\\s+distance"
+    ],
+    "BROW_DRIVE": [
+      "brows?\\s+knit",
+      "brows?\\s+dragged\\s+downward",
+      "deep\\s+furrow\\s+formed"
+    ],
+    "HARD_GESTURE": [
+      "hand\\s+cut\\s+through\\s+the\\s+air",
+      "gestured\\s+sharply",
+      "jabbed\\s+a\\s+finger"
+    ],
+
+    "DRY_TONE": [
+      "dry\\s+tone",
+      "flat\\s+tone",
+      "said\\s+flatly",
+      "voice\\s+went\\s+flat"
+    ],
+    "MOCKING_DELIVERY": [
+      "mock(ing|ingly)?",
+      "fake\\s+cheerful"
+    ],
+    "SMIRK_BEHAVIOR": [
+      "smirk(ed|ing)?",
+      "mouth\\s+quirked",
+      "mouth\\s+twitch(ed|ing)?"
+    ],
+
+    "INVESTIGATION_POSTURE": [
+      "lean(ed|ing)?\\s+in",
+      "tilt(ed|ing)?\\s+(his|her|their)?\\s*head",
+      "bent\\s+closer",
+      "leaned\\s+over\\s+to\\s+see"
+    ],
+    "QUESTION_FOCUS": [
+      "\\?",
+      "wanted\\s+to\\s+know"
+    ],
+    "ATTENTION_SHIFT": [
+      "scann(ed|ing)?",
+      "peered?",
+      "eyes?\\s+tracked",
+      "followed\\s+the\\s+movement"
+    ],
+    "FOCUSED_ATTENTION": [
+      "studied\\s+(him|her|them|it)",
+      "eyes?\\s+traced\\s+the\\s+lines",
+      "examined\\s+closely"
+    ],
+
+    "TEAR_FORMATION": [
+      "tear(s|y)?",
+      "eyes?\\s+(watered|watering)",
+      "eyes?\\s+filled\\s+with\\s+tears",
+      "moisture\\s+gathered\\s+in\\s+(his|her|their)\\s+eyes"
+    ],
+    "VOICE_BREAKING": [
+      "voice\\s+(broke|breaking)",
+      "voice\\s+threatened\\s+to\\s+break"
+    ],
+    "SAD_POSTURE": [
+      "shoulders?\\s+(fell|drooped)",
+      "slumped",
+      "curled\\s+in\\s+on\\s+(himself|herself|themself|themselves)"
+    ],
+    "EMOTIONAL_QUAVER": [
+      "voice\\s+quavered",
+      "voice\\s+shuddered",
+      "words?\\s+barely\\s+steady"
+    ],
+
+    "LOW_VOLUME_VOICE": [
+      "whisper(ed|ing)?",
+      "soft\\s+voice",
+      "quiet\\s+voice",
+      "barely\\s+audible"
+    ],
+    "CLOSE_PROXIMITY": [
+      "lean(ed|ing)?\\s+close",
+      "close\\s+enough\\s+to\\s+feel\\s+breath"
+    ],
+    "QUIET_MOVEMENT": [
+      "move(d|s|ing)?\\s+quietly",
+      "footsteps?\\s+soft"
+    ],
+
+    "HUMOR_RESPONSE": [
+      "laugh(ed|ing)?",
+      "funny",
+      "could\\s+not\\s+help\\s+but\\s+smile"
+    ],
+    "FACIAL_LIFT": [
+      "smil(ed|ing)?",
+      "eyes?\\s+crinkled"
+    ],
+    "LIGHT_ENERGY": [
+      "brightened",
+      "tension\\s+eased"
+    ],
+    "INTENSE_LAUGHING": [
+      "burst\\s+out\\s+laughing",
+      "doubling\\s+over",
+      "laughing\\s+so\\s+hard",
+      "struggled\\s+to\\s+catch\\s+(his|her|their)\\s+breath"
+    ],
+    "SMALL_LAUGHING": [
+      "chuckl(ed|ing)?",
+      "giggled?",
+      "small\\s+sound\\s+escaped"
+    ],
+    "PLAYFUL_TONE": [
+      "playful",
+      "teasing\\s+lilt"
+    ],
+
+    "SHORT_AIR_EXPULSION": [
+      "snort(ed|ing)?",
+      "huff(ed|ing)?",
+      "air\\s+puffed\\s+through"
+    ],
+
+    "LONG_BREATH_OUT": [
+      "sigh(ed|ing)?",
+      "exhal(ed|ing)?",
+      "let\\s+the\\s+air\\s+leave\\s+slowly"
+    ],
+    "TIRED_POSTURE": [
+      "weary",
+      "tired\\s+tone",
+      "looked\\s+drained"
+    ],
+
+    "RECOIL_MOVEMENT": [
+      "recoil(ed|ing)?",
+      "pulled\\s+back",
+      "took\\s+a\\s+step\\s+back",
+      "instinctively\\s+drew\\s+back"
+    ],
+    "DISGUST_REACTION": [
+      "disgust(ed|ing)?",
+      "horrified",
+      "nose\\s+wrinkled",
+      "lip\\s+curled"
+    ],
+    "DISBELIEF_STILLNESS": [
+      "froze\\s+in\\s+disbelief",
+      "went\\s+slightly\\s+rigid",
+      "stopped\\s+mid-motion"
+    ],
+
+    "SMIRK_PLAYFUL": [
+      "smirk(ed|ing)?",
+      "grin(ned|ning)?",
+      "trying\\s+not\\s+to\\s+smile"
+    ],
+    "SIDE_LOOK": [
+      "glanc(ed|ing)?\\s+sideways",
+      "side\\s+look"
+    ],
+    "SECRETIVE_BEHAVIOR": [
+      "hid(e|ing)\\s+a\\s+grin",
+      "barely\\s+suppressed\\s+a\\s+smile"
+    ],
+
+    "MICRO_ADJUST": [
+      "shift(ed|ing)?\\s+slightly",
+      "adjust(ed|ing)?\\s+(his|her|their)\\s+stance",
+      "weight\\s+shifted"
+    ],
+    "EYE_SOFTEN": [
+      "eyes?\\s+softened",
+      "gaze\\s+gentled",
+      "eyelids\\s+lowered\\s+slightly"
+    ],
+    "BODY_FREEZE_MINOR": [
+      "momentarily\\s+still",
+      "movement\\s+stilled",
+      "froze\\s+for\\s+just\\s+a\\s+second"
+    ],
+    "BREATH_CONTROL": [
+      "held\\s+(his|her|their)\\s+breath",
+      "breath\\s+shallow",
+      "breathing\\s+tight"
+    ],
+    "TENSION_LEAK": [
+      "shoulders?\\s+tightened",
+      "spine\\s+straightened",
+      "jaw\\s+ticked"
+    ],
+    "UPLIFTED_ENERGY": [
+      "stood\\s+straighter",
+      "rose\\s+onto\\s+toes",
+      "leaned\\s+in\\s+brightly"
+    ],
+    "ANTICIPATION_THRUM": [
+      "thrummed\\s+with\\s+energy",
+      "pulse\\s+quickened",
+      "vibration\\s+in\\s+the\\s+air"
+    ],
+    "FACE_COLLAPSE": [
+      "features?\\s+crumpled",
+      "mouth\\s+twisted",
+      "face\\s+fell\\s+apart"
+    ],
+    "BREAKDOWN_TENSION": [
+      "held\\s+back\\s+a\\s+sob",
+      "voice\\s+trembled\\s+hard",
+      "breath\\s+hitched\\s+again"
+    ],
+    "STARTLE_STILL": [
+      "froze\\s+mid-step",
+      "halted\\s+instantly",
+      "stopped\\s+short"
+    ],
+    "EYES_JERK": [
+      "eyes?\\s+jerked\\s+toward",
+      "gaze\\s+snapped\\s+to"
+    ],
+    "RECOIL_FACE": [
+      "face\\s+drew\\s+back"
+    ],
+    "SECRET_MOTION": [
+      "hands?\\s+disappeared\\s+behind\\s+(his|her|their)\\s+back",
+      "shoulders?\\s+hitched\\s+in\\s+a\\s+small\\s+shrug"
+    ]
+  },
+  "SEMANTIC_CUE_DICTIONARY": {
+    "angry": [
+      "JAW_CLENCH",
+      "VOICE_SHARPNESS",
+      "AGGRESSIVE_MOVEMENT",
+      "EYE_HARDENING",
+      "HAND_TENSION",
+      "FORWARD_AGGRESSION",
+      "MICRO_TENSION",
+      "BROW_DRIVE",
+      "HARD_GESTURE",
+      "TENSION_LEAK",
+      "BREATH_CONTROL"
+    ],
+    "excited": [
+      "ENERGY_RISING",
+      "FAST_MOVEMENT",
+      "VOICE_RISING",
+      "FORWARD_LEANING_POSTURE",
+      "HIGH_ENERGY_MOVEMENT",
+      "VOCAL_RAPIDITY",
+      "EYE_FLICKER",
+      "UPLIFTED_ENERGY",
+      "ANTICIPATION_THRUM",
+      "CROWD_EXCITEMENT",
+      "MICRO_ADJUST"
+    ],
+    "curious": [
+      "INVESTIGATION_POSTURE",
+      "QUESTION_FOCUS",
+      "ATTENTION_SHIFT",
+      "FOCUSED_ATTENTION",
+      "EYE_FLICKER",
+      "MICRO_ADJUST"
+    ],
+    "sarcastic": [
+      "DRY_TONE",
+      "MOCKING_DELIVERY",
+      "SMIRK_BEHAVIOR",
+      "EYE_FLICKER",
+      "TENSION_LEAK"
+    ],
+    "cry": [
+      "TEAR_FORMATION",
+      "VOICE_BREAKING",
+      "SAD_POSTURE",
+      "EMOTIONAL_QUAVER",
+      "BREATH_PATTERN_SHIFT",
+      "FACE_COLLAPSE",
+      "BREAKDOWN_TENSION"
+    ],
+    "gasp": [
+      "SUDDEN_INHALE",
+      "FREEZE_RESPONSE",
+      "EYES_WIDEN",
+      "STARTLE_MOVEMENT",
+      "SHOCK_RECOIL",
+      "BREATH_PATTERN_SHIFT",
+      "STARTLE_STILL",
+      "EYES_JERK",
+      "BODY_FREEZE_MINOR"
+    ],
+    "scream": [
+      "FREEZE_RESPONSE",
+      "EYES_WIDEN",
+      "MICRO_TENSION",
+      "BREATH_PATTERN_SHIFT",
+      "STARTLE_MOVEMENT"
+    ],
+    "whisper": [
+      "LOW_VOLUME_VOICE",
+      "CLOSE_PROXIMITY",
+      "QUIET_MOVEMENT",
+      "BREATH_PATTERN_SHIFT",
+      "BREATH_CONTROL"
+    ],
+    "laugh": [
+      "HUMOR_RESPONSE",
+      "FACIAL_LIFT",
+      "LIGHT_ENERGY",
+      "SMALL_LAUGHING",
+      "EYE_SOFTEN",
+      "MICRO_ADJUST"
+    ],
+    "laugh_harder": [
+      "INTENSE_LAUGHING",
+      "HIGH_ENERGY_MOVEMENT",
+      "UPLIFTED_ENERGY"
+    ],
+    "giggle": [
+      "SMALL_LAUGHING",
+      "PLAYFUL_TONE",
+      "UPLIFTED_ENERGY",
+      "EYE_FLICKER"
+    ],
+    "chuckle": [
+      "SMALL_LAUGHING",
+      "FACIAL_LIFT",
+      "LIGHT_ENERGY"
+    ],
+    "snort": [
+      "SHORT_AIR_EXPULSION",
+      "TENSION_LEAK"
+    ],
+    "sigh": [
+      "LONG_BREATH_OUT",
+      "TIRED_POSTURE",
+      "BREATH_PATTERN_SHIFT",
+      "ENERGY_DROOP"
+    ],
+    "exhale": [
+      "LONG_BREATH_OUT",
+      "BREATH_PATTERN_SHIFT",
+      "BREATH_CONTROL"
+    ],
+    "appalled": [
+      "RECOIL_MOVEMENT",
+      "DISGUST_REACTION",
+      "DISBELIEF_STILLNESS",
+      "RECOIL_FACE",
+      "BODY_FREEZE_MINOR"
+    ],
+    "mischievous": [
+      "SMIRK_PLAYFUL",
+      "SIDE_LOOK",
+      "SECRETIVE_BEHAVIOR",
+      "EYE_FLICKER",
+      "SECRET_MOTION"
+    ],
+    "disappointed": [
+      "GAZE_DOWNWARD",
+      "POSTURE_DROP",
+      "VOICE_SOFTENING",
+      "BREATH_CHANGE",
+      "MOVEMENT_SLOWING",
+      "ENERGY_DROOP",
+      "MICRO_TENSION",
+      "BREATH_CONTROL"
+    ],
+    "sing": [
+      "BREATH_CONTROL",
+      "LIGHT_ENERGY",
+      "UPLIFTED_ENERGY"
+    ]
+  },
+  "WEAK_PATTERNS": {
+    "angry": [
+      "jaw\\s+tightened",
+      "teeth\\s+pressed",
+      "brows?\\s+drawn\\s+in",
+      "eyes?\\s+hardened",
+      "shoulders?\\s+tensed",
+      "hands?\\s+tightened",
+      "fingers?\\s+curled",
+      "breathing\\s+sharpened",
+      "held\\s+his\\s+breath",
+      "held\\s+her\\s+breath",
+      "stood\\s+rigid",
+      "stared\\s+straight\\s+ahead",
+      "doors?\\s+slammed",
+      "fist\\s+hit\\s+the\\s+table",
+      "voice\\s+rang\\s+out",
+      "shouted?\\s+over\\s+the\\s+noise",
+      "glar(e|ing)?"
+    ],
+    "sarcastic": [
+      "tiny\\s+smirk",
+      "half\\s+smile",
+      "mouth\\s+quirked",
+      "slow\\s+blink",
+      "eyelids\\s+lowered",
+      "expression\\s+too\\s+calm"
+    ],
+    "excited": [
+      "leaned\\s+forward",
+      "eyes?\\s+brightened",
+      "steps?\\s+quickened",
+      "breath\\s+quickened",
+      "hands?\\s+animated",
+      "eyes?\\s+sparkled",
+      "leaned\\s+without\\s+thinking",
+      "shoulders?\\s+lifted",
+      "bounced\\s+on\\s+toes",
+      "crowd\\s+cheered",
+      "cheers?\\s+of\\s+the\\s+crowd",
+      "cheers?\\s+rose",
+      "a\\s+roar\\s+went\\s+up",
+      "applause\\s+erupted",
+      "stands?\\s+erupted",
+      "chant(ing)?\\s+from\\s+the\\s+crowd",
+      "rumbl(e|ing)?"
+    ],
+    "curious": [
+      "head\\s+tilted",
+      "eyes?\\s+narrowed",
+      "gaze\\s+lingered",
+      "brow\\s+arched",
+      "eyes?\\s+drawn\\s+to",
+      "studied\\s+(him|her|them|it)",
+      "looked\\s+closer"
+    ],
+    "whisper": [
+      "voice\\s+barely\\s+audible",
+      "lips?\\s+moved\\s+softly",
+      "breath\\s+softened",
+      "mouth\\s+close\\s+to",
+      "words?\\s+slipped\\s+out\\s+softly",
+      "whispers?\\s+spread",
+      "quiet\\s+whispering\\s+filled\\s+the\\s+space"
+    ],
+    "cry": [
+      "eyes?\\s+shimmered",
+      "blink(ed|ing)?\\s+rapid",
+      "chin\\s+quivered",
+      "voice\\s+thinned",
+      "breath\\s+wavered",
+      "voice\\s+barely\\s+held\\s+together",
+      "soft\\s+sobbing\\s+somewhere",
+      "muffled\\s+sob(s)?",
+      "quiet\\s+snif(f|fl)ing"
+    ],
+    "scream": [
+      "panic\\s+flickered",
+      "back\\s+stiffened",
+      "body\\s+went\\s+rigid"
+    ],
+    "sing": [
+      "lips?\\s+parted",
+      "body\\s+swayed",
+      "breath\\s+steadied",
+      "breath\\s+fell\\s+into\\s+steady\\s+rhythm"
+    ],
+    "appalled": [
+      "froze\\s+briefly",
+      "mouth\\s+parted",
+      "stared\\s+in\\s+shock",
+      "expression\\s+froze",
+      "silence\\s+fell\\s+over\\s+the\\s+room",
+      "the\\s+room\\s+went\\s+dead\\s+quiet",
+      "conversation\\s+stopped\\s+at\\s+once"
+    ],
+    "mischievous": [
+      "tiny\\s+grin",
+      "eyes?\\s+glittered",
+      "nearly\\s+smiled",
+      "eyes?\\s+danced",
+      "pretended\\s+innocence",
+      "stifled\\s+snickers?",
+      "suppressed\\s+laughter\\s+in\\s+the\\s+corner"
+    ],
+    "disappointed": [
+      "looked\\s+down",
+      "shoulders?\\s+dipped",
+      "face\\s+lost\\s+light",
+      "breath\\s+slipped",
+      "expression\\s+dimmed"
+    ],
+    "sigh": [
+      "shoulders?\\s+sagged",
+      "breath\\s+eased",
+      "weight\\s+seemed\\s+to\\s+settle",
+      "posture\\s+softened",
+      "a\\s+long\\s+sigh\\s+went\\s+around",
+      "collective\\s+exhale"
+    ],
+    "exhale": [
+      "breath\\s+flowed\\s+out\\s+slowly",
+      "air\\s+eased",
+      "breath\\s+slipped\\s+out"
+    ],
+    "gasp": [
+      "froze\\s+for\\s+a\\s+moment",
+      "eyes?\\s+widened",
+      "hands?\\s+paused",
+      "movement\\s+halted",
+      "a\\s+collective\\s+gasp",
+      "the\\s+room\\s+gasped",
+      "people\\s+drew\\s+in\\s+breath"
+    ],
+    "gulp": [
+      "throat\\s+tightened",
+      "swallowed\\s+quietly",
+      "jaw\\s+worked",
+      "mouth\\s+went\\s+dry"
+    ],
+    "chuckle": [
+      "small\\s+smile",
+      "eyes?\\s+softened",
+      "amusement\\s+flickered",
+      "face\\s+eased",
+      "posture\\s+loosened"
+    ],
+    "giggle": [
+      "tiny\\s+grin",
+      "eyes?\\s+twinkled",
+      "lightness\\s+in\\s+step",
+      "small\\s+bounce"
+    ],
+    "laugh": [
+      "face\\s+brightened",
+      "smile\\s+forming",
+      "shoulders?\\s+relaxed",
+      "expression\\s+warmed",
+      "tension\\s+released",
+      "laughter\\s+rippled",
+      "a\\s+low\\s+chuckle\\s+ran\\s+through\\s+the\\s+room",
+      "the\\s+room\\s+erupted\\s+in\\s+laughter"
+    ],
+    "laugh_harder": [
+      "shoulders?\\s+shook",
+      "bending\\s+forward",
+      "clutched\\s+(his|her|their)\\s+stomach",
+      "howls?\\s+of\\s+laughter",
+      "roars?\\s+of\\s+laughter"
+    ],
+    "snort": [
+      "small\\s+huff",
+      "air\\s+puffed\\s+out",
+      "nose\\s+twitch(ed|ing)?"
+    ]
+  },
+  "NEGATIVE_PATTERNS": {
+    "excited": [
+      "too\\s+tired\\s+to\\s+care",
+      "couldn'?t\\s+bring\\s+(himself|herself|themself|themselves)\\s+to\\s+move",
+      "barely\\s+reacted"
+    ],
+    "angry": [
+      "not\\s+angry\\s+just",
+      "tried\\s+not\\s+to\\s+get\\s+angry",
+      "it\\s+wasn'?t\\s+anger"
+    ],
+    "cry": [
+      "almost\\s+cried\\s+but\\s+didn'?t",
+      "on\\s+the\\s+verge\\s+of\\s+tears\\s+but\\s+held\\s+it\\s+back"
+    ],
+    "laugh": [
+      "wanted\\s+to\\s+laugh\\s+but\\s+didn'?t",
+      "it\\s+wasn'?t\\s+funny"
+    ],
+    "disappointed": [
+      "not\\s+disappointed\\s+at\\s+all",
+      "far\\s+from\\s+disappointed"
+    ]
+  },
+  "STRONG_CUES" :{
+    "angry": [
+        "yell", "shout", "snapp", "roar",
+        "slammed the", "stomp", "threw", "growl",
+        "voice thundered", "furious", "rage fill",
+        "glared at", "eyes burn"
+    ],
+
+    "sarcastic": [
+        "yeah right", "as if", "sure you did",
+        "said with a smirk", "mockingly", "deadpan",
+        "slow clap", "fake enthusiasm"
+    ],
+
+    "excited": [
+        "eyes lit up", "couldn't wait", "burst forward",
+        "nearly jumped", "thrilled", "full of energy",
+        "practically bouncing", "leaned forward eagerly"
+    ],
+
+    "curious": [
+        "leaned closer", "tilted head", "asked softly",
+        "examined closely", "studied intently", "looked over carefully",
+        "peered at", "inspect"
+    ],
+
+    "whisper": [
+        "whisper", "murmur", "barely audible",
+        "hushed voice", "said softly", "quiet whisper"
+    ],
+
+    "cry": [
+        "burst into tears", "started crying",
+        "sobbing uncontrollably", "tears streamed",
+        "voice broke completely", "wept loud"
+    ],
+
+    "scream": [
+        "shrieked", "yelled at the top of",
+        "screamed out loud", "high-pitched scream",
+        "let out a scream"
+    ],
+
+    "sing": [
+        "sang softly", "began singing", "melody float",
+        "hummed a tune", "voice carried the melody"
+    ],
+
+    "sigh": [
+        "let out a long sigh", "sighed heavily",
+        "released a weary sigh", "deep sigh escape"
+    ],
+
+    "exhale": [
+        "exhaled sharply", "let out a breath",
+        "blew out air", "released a breath slowly"
+    ],
+
+    "gasp": [
+        "gasped loudly", "sharp gasp", "inhaled sharply",
+        "mouth flew open", "breath caught"
+    ],
+
+    "gulp": [
+        "gulped hard", "swallowed hard",
+        "audible gulp", "throat tightened"
+    ],
+
+    "chuckle": [
+        "let out a soft laugh",
+        "low chuckle escaped", "short, warm laugh"
+    ],
+
+    "giggle": [
+        "burst into giggles", "high-pitched giggle", "girlish giggle"
+    ],
+
+    "laugh": [
+        "laughed out loud", "burst into laughter",
+        "cracked up", "roared with laughter"
+    ],
+
+    "laugh_harder": [
+        "doubled over laughing", "laughing uncontrollably",
+        "couldn't stop laughing", "roared with laughter"
+    ],
+
+    "snort": [
+        "snorted", "snorted a laugh", "snorted loudly"
+    ],
+
+    "appalled": [
+        "horrified", "recoiled in disgust",
+        "staggered back", "face twisted with disgust"
+    ],
+
+    "mischievous": [
+        "grinned slyly", "mischievous glint",
+        "scheming smile", "eyes sparkled with mischief",
+        "smirked knowingly"
+    ],
+
+    "disappointed": [
+        "voice fell flat", "face fell",
+        "looked crestfallen", "slumped with disappointment",
+        "eyes dimmed"
+    ]
+},
+  "MODERATE_CUES": {
+    "angry": [
+        "irritate", "annoy", "tone sharpen",
+        "brows furrow", "tense voice",
+        "short tone", "snapped back", "sharp reply"
+    ],
+
+    "sarcastic": [
+        "smirked", "dryly", "flat tone",
+        "tone dripping with sarcasm", "mocking tone"
+    ],
+
+    "excited": [
+        "thrill", "eager",
+        "voice rising", "leaning forward",
+        "eyes sparkl", "energy rising"
+    ],
+
+    "curious": [
+        "wondered", "brows lifted",
+        "examined", "leaned in slightly",
+        "intrigued", "question"
+    ],
+
+    "whisper": [
+        "soft tone", "quietly",
+        "low voice", "barely said"
+    ],
+
+    "cry": [
+        "eyes watered", "voice waver",
+        "breathing uneven", "on the verge of tear"
+    ],
+
+    "scream": [
+        "raised voice", "shouting tone",
+        "voice sharpen", "high pitched voice"
+    ],
+
+    "sing": [
+        "light humming", "soft tune",
+        "melodic voice"
+    ],
+
+    "sigh": [
+        "tired tone", "breath slip",
+        "heavy breath", "felt drain"
+    ],
+
+    "exhale": [
+        "breath escap", "steadying breath",
+        "slow breath"
+    ],
+
+    "gasp": [
+        "breath caught", "sharp inhale",
+        "surprised", "eyes widened slightly"
+    ],
+
+    "gulp": [
+        "nervous swallow", "dry mouth",
+        "throat tightened slightly"
+    ],
+
+    "chuckle": [
+        "amused", "smiled lightly",
+        "soft laugh"
+    ],
+
+    "giggle": [
+        "light laugh", "tiny laugh",
+        "smiled playfully"
+    ],
+
+    "laugh": [
+        "soft laugh", "amused tone",
+        "found it funny", "small burst"
+    ],
+
+    "laugh_harder": [
+        "laughing more", "laughed hard",
+        "trying not to laugh"
+    ],
+
+    "snort": [
+        "short breath out", "small huff",
+        "tiny snort"
+    ],
+
+    "appalled": [
+        "stepped back slightly", "brows lifted in shock",
+        "froze for a moment", "visibly disturb"
+    ],
+
+    "mischievous": [
+        "playful look", "eyes sparkled briefly",
+        "hint of a grin", "subtle smirk"
+    ],
+
+    "disappointed": [
+        "looked down", "quiet tone",
+        "weakened posture", "shoulders dipped"
+    ]
+}
+}

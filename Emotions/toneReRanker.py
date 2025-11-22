@@ -1,34 +1,38 @@
 import re
-import math
+import json
+
+with open('Emotions/emotion_dictionary.json') as f:
+    CUE_DICTIONARY = json.load(f)
 
 # ---------------------------------------------------------
 # BASE AUDIOBOOK WEIGHTS
 # ---------------------------------------------------------
 
+
 REQUIRED_MIN_SCORE = {
-    "angry": 0.65,
-    "sarcastic": 0.60,
-    "excited": 0.60,
-    "curious": 0.60,
-    "whisper": 0.60,
-    "cry": 0.60,
-    "scream": 0.65,
-    "sing": 0.65,
+    "angry": 0.55,
+    "sarcastic": 0.50,
+    "excited": 0.50,
+    "curious": 0.50,
+    "whisper": 0.50,
+    "cry": 0.50,
+    "scream": 0.55,
+    "sing": 0.50,
 
-    "appalled": 0.60,
-    "mischievous": 0.55,
-    "disappointed": 0.55,
+    "appalled": 0.50,
+    "mischievous": 0.45,
+    "disappointed": 0.45,
 
-    "sigh": 0.55,
-    "exhale": 0.55,
-    "gasp": 0.55,
-    "gulp": 0.65,
+    "sigh": 0.45,
+    "exhale": 0.45,
+    "gasp": 0.45,
+    "gulp": 0.55,
 
-    "chuckle": 0.55,
-    "giggle": 0.55,
-    "laugh": 0.60,
-    "laugh_harder": 0.65,
-    "snort": 0.70
+    "chuckle": 0.45,
+    "giggle": 0.45,
+    "laugh": 0.50,
+    "laugh_harder": 0.55,
+    "snort": 0.60
 }
 
 FALSE_POSITIVE_PENALTY = {
@@ -57,300 +61,16 @@ FALSE_POSITIVE_PENALTY = {
     "gulp": 0.0,
 }
 
-# ---------------------------------------------------------
-# LEXICAL CUES
-# ---------------------------------------------------------
-
-STRONG_CUES = {
-    "angry": [
-        "yell", "shout", "yelled", "shouted", "snap", "furious", "rage", "angrily", "mad", "irritated", "annoyed",
-        "fuming", "gritted his teeth", "snarl", "glared", "eyes burned", "stomped", "slammed", "shook with anger"
-    ],
-    "sarcastic": [
-        "yeah right", "sure", "oh wow", "really?", "as if", "right...", "mocking", "ironic", "snarky",
-        "dry tone", "slow clap", "mockingly", "dry tone", "smirked", "said with a smirk", "said flatly",
-        "deadpan"
-    ],
-    "excited": [
-        "amazing!", "incredible!", "can't wait", "wow!", "so excited", "thrill", "eager", "enthusiast",
-        "pumped", "lively", "eyes lit up", "leaned forward eagerly"
-    ],
-    "curious": [
-        "what's this", "hmm", "tilted his head", "tilted her head", "wonder", "inquisitive", "question",
-        "puzzle", "brows lifted", "eyes narrowed in thought", "studied him", "peered", "examined", "questioned"
-    ],
-    "whisper": [
-        "whispered", "softly", "murmur", "hush", "soft voice", "quiet voice", "under her breath", "under her breath",
-        "barely audible", "hushed voice"
-    ],
-    "cry": [
-        "tears", "cried", "choking up", "crying", "sobs", "weep", "whimper", "bawl",
-        "tears", "sobbing", "choking up", "voice broke", "weeping", "sniffling", "tear-streaked", "sobbed"
-    ],
-    "scream": [
-        "yell", "shout", "shriek", "screamed", "shrieked", "yelled!", "shouted!", "howled",
-        "voice cracked from shouting", "let out a scream"
-    ],
-    "sing": [
-        "sang", "singing", "melody", "humming", "tune", "softly singing"
-    ],
-    "sigh": [
-        "sigh", "sighed", "weary", "exasperated", "breath out", "long breath", "long sigh", "exasperated",
-        "let out a sigh", "breath escaped", "shoulders slumped"
-    ],
-    "exhale": [
-        "exhaled", "let out a breath", "released a breath", "breath rushed out", "long breath"
-    ],
-    "gasp": [
-        "gasp", "gasped", "sharp breath", "eyes widened", "whoa", "inhale sharply", "breath hitched",
-        "intake of breath", "swallow hard", "tight throat", "startled"
-    ],
-    "gulp": [
-        "gulped", "swallowed hard", "tight throat", "dry swallow"
-    ],
-    "chuckle": [
-        "laughs softly", "chuckled", "small laugh", "amused sound", "low laugh"
-    ],
-    "giggle": [
-        "giggled"
-    ],
-    "laugh": [
-        "laughed", "funny", "burst into laughter", "couldn't stop laughing", "cracked up", "laughed out loud"
-    ],
-    "laugh_harder": [
-        "burst out laughing", "laughing harder", "doubling over in laughter",
-        "roared with laughter" "couldn't hold back laughter"
-    ],
-    "snort": [
-        "snicker",
-    ],
-    "appalled": [
-        "appalled", "disgusted", "horrified", "recoiled",
-        "face twisted in disgust", "staggered back", "what on earth"
-    ],
-    "mischievous": [
-        "grin", "glint in his eye", "glint in her eye",
-        "smirked", "playful smirk", "grinned slyly", "scheming"
-    ],
-    "disappointed": [
-        "let down", "crestfallen", "slumped", "face fell", "voice fell", "eyes dimmed", "deep sigh"
-    ],
-}
-
-MODERATE_CUES = {
-    "angry": [
-         "annoyed", "irritated", "tense voice", "short tone", "frustrated", "brows furrowed", "sharp tone"
-    ],
-    "sarcastic": [
-        "smirked", "dryly", "flat tone"
-    ],
-    "excited": [
-        "thrilled", "eager", "anticipation", "buzzing", "louder", "rising energy", "excitement",
-        "leaned forward", "eyes sparkled", "loud"
-    ],
-    "curious": [
-        "curious", "wondering", "leaned in slightly", "thoughtful tone", "studying", "intrigued"
-    ],
-    "whisper": [
-        "quietly", "low voice", "soft tone", "barely said"
-    ],
-    "cry": [
-        "voice wavered", "eyes watered", "emotional", "on the verge of tears"
-    ],
-    "scream": [
-        "raised voice", "shouting tone", "high-pitched voice"
-    ],
-    "sing": [
-        "light humming", "soft tune", "melodic voice"
-    ],
-
-    "sigh": [
-        "tired tone", "heavy breath", "felt drained"
-    ],
-    "exhale": [
-        "breath escaped", "slow breath", "steadying breath"
-    ],
-    "gasp": [
-        "breath caught", "sharp inhale", "surprised"
-    ],
-    "gulp": [
-        "nervous swallow", "dry mouth"
-    ],
-    "chuckle": [
-        "amused", "smiled lightly"
-    ],
-    "giggle": [
-        "smiled", "light laugh"
-    ],
-
-    "laugh": [
-        "funny", "soft laugh", "amused tone"
-    ],
-    "laugh_harder": [
-        "laughing more", "couldn't hold back laughter"
-    ],
-    "snort": [
-        "amused breath"
-    ],
-    "appalled": [
-        "pulled back slightly", "stepped away", "brows lifted sharply"
-    ],
-    "mischievous": [
-        "smirked lightly", "eyes sparkled with intent",
-        "playful look", "tilted head with a grin"
-    ],
-    "disappointed": [
-        "looked down", "quiet tone", "shoulders lowered", "tone softened", "weak smile"
-    ],
-}
-
-WEAK_CUES = {
-    "excited": [
-        "energy", "buzzing", "rumble", "roar", "steps quickened", "anticipation built",
-        "air vibrated", "waves of sound", "movement all around",
-        "lights brightened", "hustle of people", "energy rising",
-        "felt alive", "heart picked up", "quickened pace",
-        "could feel it in the air", "electric atmosphere"
-        "quick movements", "brisk pace", "bright surroundings",
-        "momentum grew", "felt the pull forward", "alive with motion", "cheers"
-    ],
-
-    "curious": [
-        "studied", "peered", "tilted", "leaned in", "observed",
-        "examined", "looked closer", "glanced around", "lingered gaze",
-        "scanned the area", "brows raised slightly", "head tilted",
-        "traced the lines", "paused to look", "eyes followed",
-        "inspect", "unknown sight", "caught attention",
-        "shifted focus", "drawn toward"
-    ],
-
-    "sigh": [
-        "long moment", "heavy silence", "quiet settled",
-        "weight of the", "took a moment", "rested her shoulders",
-        "rested his shoulders", "slowed to a stop", "stillness hung",
-        "lingering quiet", "moment stretched", "breath softened",
-        "sank slightly", "lowered posture", "quiet pause",
-        "time seemed to slow", "let things settle"
-    ],
-
-    "exhale": [
-        "breath escaped", "release of air", "tension leaving",
-        "slow air", "steadying himself", "steadying herself",
-        "loosening grip", "relaxing slightly", "chest lowered",
-        "air drifted", "in the stillness", "dropped his shoulders",
-        "dropped her shoulders", "breath slipped out"
-    ],
-
-    "gasp": [
-        "froze", "went still", "eyes wide", "eyes widened",
-        "heart skipped", "shock ran through", "stopped short",
-        "pulled back slightly", "stiffened", "halted mid-step",
-        "sudden silence", "everything stopped", "sharp movement",
-        "jerked back", "stumbled for a moment"
-    ],
-
-    "gulp": [
-        "swallowed", "tight throat", "dry throat", "nervous stillness",
-        "rigid posture", "shifted nervously", "unsteady hands",
-        "backed up a step", "looked uneasy", "hesitant pause",
-        "mouth tightened", "lips pressed together", "averted eyes",
-        "leaned away slightly"
-    ],
-
-    "angry": [
-        "jaw tightened", "tension rose", "sharp look", "muscles tensed",
-        "brows narrowed", "steps heavy", "slammed down his foot",
-        "shoulders locked", "hands tightened", "eyes hardened",
-        "tone dropped", "movement stiff", "cold stare",
-        "clenched posture", "held firm", "unblinking glare"
-    ],
-
-    "whisper": [
-        "leaned close", "brought face closer", "steps softened",
-        "moved quietly", "softened posture", "ducked head slightly",
-        "held breath for a moment", "lowered voice area",
-        "dimly lit space", "shadows stretched long"
-    ],
-
-    "cry": [
-        "voice thin", "words faltered", "breathing uneven",
-        "looked down at the ground", "held her arm tightly",
-        "held his arm tightly", "wavered", "trembled slightly",
-        "blinked a few times", "blinked rapidly", "voice nearly broke",
-        "edges of voice softened", "stillness of the moment"
-    ],
-
-    "scream": [
-        "rising panic", "frantic movement", "backed away quickly",
-        "scrambled", "chaos erupted",
-        "crack of tension",
-        "surge of adrenaline", "disturbance ahead"
-    ],
-
-    "laugh": [
-        "loosening tension", "face brightened", "smile forming",
-        "a bit lighter", "moment eased", "soft warmth",
-        "playful energy", "air shifted brighter"
-    ],
-
-    "chuckle": [
-        "small smile", "lips curled slightly", "eyes softened",
-        "tiny smirk", "easy movement", "relaxed a little"
-    ],
-
-    "giggle": [
-        "lightness in the air", "small bounce in her step",
-        "tiny grin", "playful eyes"
-    ],
-
-    "laugh_harder": [
-        "bending forward slightly", "clutching stomach lightly",
-        "face lighting up strongly"
-    ],
-
-    "snort": [
-        "short breath out", "huffed lightly", "quick puff of air"
-    ],
-
-    "sing": [
-        "rhythmic movement", "soft humming rhythm",
-        "gentle cadence", "flowing tone in the air"
-    ],
-    "appalled": [
-        "froze in place", "stopped mid-step", "expression shifted", "leaned back slightly", "hesitated visibly",
-        "pulled her hand back", "pulled his hand back", "drew back a little", "took a half step back",
-        "went quiet suddenly", "room fell still", "eyes darted away", "stiffened for a moment",
-        "blinked twice", "blinked rapidly", "mouth opened slightly", "jaw slackened for a moment",
-        "air seemed to thin", "movement halted briefly", "went rigid", "grip loosened slightly",
-        "voice caught for a second", "breath faltered", "tension rippled through",
-    ],
-    "mischievous": [
-        "hint of a grin", "tiny grin forming", "glanced sideways", "glance to the side",
-        "eyes narrowed playfully", "eyes sparkled briefly", "small smirk", "corner of mouth lifted",
-        "shifted weight lightly", "rocked on heels", "tilted her head with interest", "tilted his head with interest",
-        "hands clasped behind back", "hands tucked behind", "stepped closer with ease", "leaned in slightly",
-        "felt the moment lighten", "air grew lighter", "whisper of amusement", "playful glint",
-        "tried to hide a smile", "nearly broke into a smile", "pretended not to notice", "looked far too casual",
-    ],
-    "disappointed": [
-        "quiet for a moment", "voice low", "moment stretched out", "air grew still",
-        "looked down briefly", "glanced at the floor", "slowed his step", "slowed her step",
-        "shoulders dipped slightly", "posture loosened", "let the silence linger", "fell quiet again",
-        "breath softened", "voice softened", "held her arm lightly", "held his arm lightly",
-        "stared at the ground", "stared past him", "lowered his gaze", "lowered her gaze",
-        "hands relaxed at sides", "hands dropped slightly",
-        "exhaled without noticing", "paused mid-sentence",
-        "tone faded briefly", "words trailed off", "but I couldn't"
-    ],
-}
-
 
 # ---------------------------------------------------------
 # SCORING LEXICAL
 # ---------------------------------------------------------
 
+def morphs(tag):
+    return  r"\b" + re.escape(tag) + r"(s|ed|ing|ly|er)?\b"
 
-def  score_lexical(tag, text):
+
+def score_lexical(tag, text):
     t = text.lower()
     tag = tag.lower()
 
@@ -359,34 +79,51 @@ def  score_lexical(tag, text):
     # --------------------------------------------------------
     # 1. Morphological match: laugh/laughs/laughed/laughing
     # --------------------------------------------------------
-    morph_tag = r"\b" + re.escape(tag) + r"(s|ed|ing)?\b"
-    if re.search(morph_tag, t):
-        score += 2.0
+
+    if re.search(morphs(tag), t):
+        score += 0.3
 
     # --------------------------------------------------------
     # 2. STRONG CUES (priority)
     # --------------------------------------------------------
-    for cue in STRONG_CUES.get(tag, []):
+    for cue in CUE_DICTIONARY['STRONG_CUES'].get(tag, []):
         cue_l = cue.lower()
-        if re.search(rf"\b{re.escape(cue_l)}\b", t):
-            score += 2.0
+        if re.search(morphs(cue_l), t):
+            score += 0.25
 
     # --------------------------------------------------------
     # 3. MODERATE CUES
     # --------------------------------------------------------
-    for cue in MODERATE_CUES.get(tag, []):
+    for cue in CUE_DICTIONARY['MODERATE_CUES'].get(tag, []):
         cue_l = cue.lower()
-        if re.search(rf"\b{re.escape(cue_l)}\b", t):
-            score += 1.0
+        if re.search(cue_l, t):
+            score += 0.15
 
     # --------------------------------------------------------
     # 4. Week CUES
     # --------------------------------------------------------
-    for cue in WEAK_CUES.get(tag, []):
-        cue_l = cue.lower()
-        if re.search(rf"\b{re.escape(cue_l)}\b", t):
-            score += 0.5
 
+    semantic_score = 0
+    families = CUE_DICTIONARY['SEMANTIC_CUE_DICTIONARY'].get(tag, [])
+    for fam in families:
+        patterns = CUE_DICTIONARY['MACRO_PATTERNS'].get(fam, [])
+        for p in patterns:
+            if semantic_score >= 0.6:
+                break
+            if re.search(p, t):
+                semantic_score += 0.2
+
+    score += semantic_score
+
+    weak_score = 0
+    for cue in CUE_DICTIONARY['WEAK_PATTERNS'].get(tag, []):
+        if weak_score >= 0.40:
+            break
+        cue_l = cue.lower()
+        if re.search(cue_l, t):
+            weak_score += 0.08
+
+    score += weak_score
     # --------------------------------------------------------
     # 5. NO MATCH
     # --------------------------------------------------------
@@ -397,9 +134,22 @@ def lexical_candidate_tags(text) :
     candidates = []
     for tag in REQUIRED_MIN_SCORE.keys():  # all known tags
         raw_lex = score_lexical(tag, text)
-        if raw_lex >= 1.5:
+        if raw_lex >= 0.18:
             candidates.append(tag)
     return candidates
+
+
+def custom_negative_patterns(tag, text):
+
+    score = 0
+    negatives = CUE_DICTIONARY['NEGATIVE_PATTERNS'].get(tag, [])
+    for neg in negatives:
+        if score >= 0.5:
+            break
+        if re.search(neg, text):
+            score += 0.25
+
+    return score
 
 # ---------------------------------------------------------
 # GENRE ADD-ON RULES
@@ -429,7 +179,7 @@ def apply_genre_rules(tag, text, base_score, genre):
 
         # boost curious for inquisitive questions
         if tag == "curious" and "?" in t:
-            base_score += 0.05
+            base_score += 0.15
 
         # shy/awkward tension
         if tag in ["chuckle", "giggle"] and any(x in t for x in ["you're ridiculous", "shut up", "don't judge"]):
@@ -495,25 +245,31 @@ def apply_genre_rules(tag, text, base_score, genre):
 # FINAL RERANK FUNCTION WITH GENRE
 # ---------------------------------------------------------
 
+LLM_prob = [0.95, 0.55]
 
-def rerank(text, candidate_tags, genre="normal", top_k=2):
+
+def rerank(text, model_tags, genre="normal", top_k=2):
     results = []
-    LLM_prob = [0.95, 0.45, 0.1]
-    lex_candidates = lexical_candidate_tags(text)
 
-    for lex_cand in lex_candidates:
-        if lex_cand not in candidate_tags:
-            candidate_tags.append(lex_cand)
+    candidate_tags = list(model_tags)
+
+    for cand in lexical_candidate_tags(text):
+        if cand not in candidate_tags:
+            candidate_tags.append(cand)
 
     for i, tag in enumerate(candidate_tags):
-        LLM_score = LLM_prob[i]
-        les = score_lexical(tag, text)
-        if les < 1.5:
-            les = 0.0
+
+        lex_score = score_lexical(tag, text)
+        if tag in model_tags:
+            LLM_score = LLM_prob[i]
+        else:
+            LLM_score = 0.30 + 0.40 * min(1.0, lex_score / 0.85)
+
         fpp = FALSE_POSITIVE_PENALTY[tag]
+        cfpp = custom_negative_patterns(tag, text)
         required = REQUIRED_MIN_SCORE[tag]
 
-        base_score = 0.6 * LLM_score + 0.4 * les - fpp
+        base_score = 0.35 * LLM_score + 0.65 * lex_score - fpp - cfpp
 
         # apply genre rules
         final_score = round(apply_genre_rules(tag, text, base_score, genre), 2)
@@ -532,8 +288,8 @@ def rerank(text, candidate_tags, genre="normal", top_k=2):
 # ---------------------------------------------------------
 
 if __name__ == "__main__":
-    curr_s = "That made me feel like he knows just how strong this person is."
+    curr_s = "The roar of the crowd grew louder as I approached the gate leading to the coliseum field."
 
-    model_tags = ['CURIOUS']
+    model_tags = ['EXCITED']
 
     print(rerank(curr_s, [t.lower() for t in model_tags], genre="YA"))
