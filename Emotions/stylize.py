@@ -2,7 +2,7 @@ import torch
 import inspect
 from tqdm import tqdm
 from Generator.utils import createChunks
-from Emotions.utils import getModelAndTokenizer, fast_generate, repeat_past_kv, getDevice, clear_cache
+from Emotions.utils import getModelAndTokenizer, fast_generate, repeat_past_kv, getDevice, clear_cache, slice_prefix_kv
 from utils import updateCache
 import warnings
 from transformers.utils import logging
@@ -11,36 +11,26 @@ warnings.filterwarnings("ignore")
 logging.set_verbosity_error()
 
 
-SYSTEM_PROMPT = inspect.cleandoc("""
-You are a professional editor preparing manuscripts for audiobook narration. Your task is to refine the paragraph to improve clarity, rhythm, 
+PREFIX_PROMPT = inspect.cleandoc("""
+You are a professional editor preparing manuscripts for audiobook narration. Refine the paragraph to improve clarity, rhythm, 
 and spoken-flow readability while maintaining all story details and staying true to the author’s voice.
 
-Very important Guidelines:
-- Preserve the emotional intent, atmosphere, and style of the writing.
-- Maintain the pacing and dramatic beats of the scene.
-- Keep character voice, tone, and attitude unchanged.
-- Correct grammar, sentence structure, punctuation, and word only where it 
-  enhances clarity or improves how the text sounds when read aloud.
-- If the author uses vague or informal language (e.g., "stuff","things","somewhere"), keep it vague. 
-  Do not specify or replace it with more precise terms.
-- Strengthen readability and natural rhythm for voice actors without altering meaning.
-- Avoid introducing new imagery, metaphors, or descriptive elements.
-- Avoid removing key details or shortening passages in ways that alter the feel.
-- Keep the writing consistent from sentence to sentence and across scenes.
-- Do not over-polish or make the prose sound generic or mechanical.
+Editing Rules (very important):
+- Preserve the emotional intent, atmosphere, tone, and the author's voice.
+- Maintain pacing and dramatic beats; do not remove key details or shorten the scene.
+- Fix grammar, sentence structure, punctuation, and word choice **only** when it clearly improves clarity or how the text sounds when read aloud.
+- Keep vague or informal language as-is (e.g., "stuff","things","somewhere"); do not make the prose generic or over-polished.
+- Do not introduce new imagery, metaphors, actions, or descriptive elements.
+- Only apply quotation marks when the text explicitly or implicitly indicates that a character is speaking aloud, and preserve the original wording of the spoken line.
+- Keep the writing consistent across sentences and scenes, improving readability without changing meaning.
 
-Return only the edited paragraph, clean and ready for audiobook production.
-""")
+Return only the edited paragraph. If no edits are needed, return it unchanged.
+""") + "\n"
 
 
 def build_system_prefix_cache(model, tokenizer):
-    prompt = tokenizer.apply_chat_template(
-        [{"role": "system", "content": SYSTEM_PROMPT}],
-        add_generation_prompt=False,
-        tokenize=False,
-    )
 
-    enc = tokenizer(prompt, return_tensors="pt").to(getDevice())
+    enc = tokenizer(PREFIX_PROMPT, return_tensors="pt").to(getDevice())
 
     with torch.inference_mode():
         out = model(
@@ -63,27 +53,23 @@ def stylize(Args, pages, notebook_name, section_name, VOICE_CACHE):
 
     static_ids, static_mask, static_past = build_system_prefix_cache(model, tokenizer)
 
+    BATCH_SIZE = 2
+    past_batch = repeat_past_kv(static_past, BATCH_SIZE)
     processed = 0
-    for page in tqdm(pages, desc="Pages", ncols=100):
+    for page in tqdm(pages, desc="Pages", ncols=100, position=0):
         content = page['content']
         try:
-            chunks = createChunks(content, limit=3000)
-
-            BATCH_SIZE = min(20, len(chunks))
-
-            prompts = generate_prompts(chunks, tokenizer)
-            outputs = []
-            for i in range(0, len(prompts), BATCH_SIZE):
-                batch_prompts = prompts[i: i + BATCH_SIZE]
-                outputs.extend(
-                    paragraph_stylization(model, batch_prompts, terminators, tokenizer, static_mask, static_past)
-                )
+            chunks = createChunks(content, limit=2000)[:4]
+            prompts = generate_prompts(chunks)
+            outputs = paragraph_stylization(model, prompts, terminators, tokenizer, static_mask, past_batch, BATCH_SIZE)
 
             # Save the page generated
             if outputs:
                 VOICE_CACHE[notebook_name][section_name][page["title"]] = outputs
                 updateCache('voiceCache.json', VOICE_CACHE)
                 processed += 1
+            else:
+                print(f"Stylization skipped for page {page['title']}.")
 
         except Exception as e:
             print(f"Error for page {page['title']}: {e}\n. Skipping...")
@@ -92,70 +78,70 @@ def stylize(Args, pages, notebook_name, section_name, VOICE_CACHE):
     return processed
 
 
-def paragraph_stylization(model, prompts, terminators, tokenizer, static_mask, static_past):
+def paragraph_stylization(model, prompts, terminators, tokenizer, static_mask, past_batch, BATCH_SIZE):
     outputs = []
     device = next(model.parameters()).device
-    try:
-        dyn = tokenizer(
-            prompts,
-            return_tensors="pt",
-            padding=True,
-            truncation=False,
-        ).to(device)
+    for i in tqdm(range(0, len(prompts), BATCH_SIZE), desc="Paragraphs", ncols=90, position=1):
+        try:
+            batch_prompts = prompts[i: i + BATCH_SIZE]
+            dyn = tokenizer(
+                batch_prompts,
+                return_tensors="pt",
+                padding=True,
+                truncation=False,
+            ).to(device)
 
-        dyn_ids = dyn["input_ids"]
-        dyn_mask = dyn["attention_mask"]
+            dyn_ids = dyn["input_ids"]
+            dyn_mask = dyn["attention_mask"]
 
-        batch_size = dyn_ids.size(0)
-        # prefix_len = static_ids.size(1)
+            batch_size = dyn_ids.size(0)
+            # prefix_len = static_ids.size(1)
 
-        # Build combined mask
-        full_mask = torch.cat(
-            [static_mask.repeat(batch_size, 1), dyn_mask],
-            dim=1
-        )
-
-        # Broadcast prefix KV cache
-        past_batch = repeat_past_kv(static_past, batch_size)
-
-        with torch.inference_mode():
-            generated = fast_generate(
-                model,
-                dynamic_ids=dyn_ids,
-                attention_mask=full_mask,
-                past_key_values=past_batch,
-                max_new_tokens=512,
-                eos_token_id=terminators,
+            # Build combined mask
+            full_mask = torch.cat(
+                [static_mask.repeat(batch_size, 1), dyn_mask],
+                dim=1
             )
 
-        gen_only = generated[:, dyn_ids.size(1):]
-        for i in range(batch_size):
-            text = tokenizer.decode(gen_only[i], skip_special_tokens=True).strip()
-            outputs.append(text)
+            past_batch_val = past_batch
+            if batch_size < BATCH_SIZE:
+                past_batch_val = slice_prefix_kv(past_batch, batch_size)
 
-    except Exception as e:
-        print(f"Error : {e}\n.")
+            with torch.inference_mode():
+                generated = fast_generate(
+                    model,
+                    dynamic_ids=dyn_ids,
+                    attention_mask=full_mask,
+                    past_key_values=past_batch_val,
+                    max_new_tokens=256,
+                    eos_token_id=terminators,
+                )
 
-    finally:
-        dyn = None
-        generated = None
-        gen_only = None
+            gen_only = generated[:, dyn_ids.size(1):]
+            for i in range(batch_size):
+                text = tokenizer.decode(gen_only[i], skip_special_tokens=True).strip()
+                outputs.append(text)
+
+        except Exception as e:
+            print(f"Error : {e}\n. Model didn't process the batch.")
+
+        finally:
+            dyn = None
+            generated = None
+            gen_only = None
 
     return outputs
 
 
-def generate_prompts(chunks, tokenizer):
+def generate_prompts(chunks):
     prompts = []
     for paragraph in chunks:
-        messages = [
-            {"role": "user", "content": paragraph}
-        ]
-        prompt = tokenizer.apply_chat_template(
-            messages,
-            add_generation_prompt=True,
-            tokenize=False
-        )
-        prompts.append(prompt)
+        prompt = inspect.cleandoc(f"""
+                Paragraph:
+                {paragraph}
 
+                Edited paragraph:
+                """)
+        prompts.append(prompt)
     return prompts
 
