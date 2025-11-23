@@ -177,6 +177,7 @@ def processVoice(model, device, tokenizer, snac_model, text, description, part):
     while not EOS_FOUND:
         with torch.inference_mode():
             outputs = fast_generate_sampling(
+                model,
                 dynamic_ids=inputs["input_ids"],
                 attention_mask=inputs["attention_mask"],
                 max_new_tokens=max_new_tokens,  # Increase to let model finish naturally

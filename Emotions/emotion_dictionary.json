@@ -110,6 +110,7 @@
       "cheers?\\s+of\\s+the\\s+crowd",
       "cheers?\\s+rose",
       "a\\s+roar\\s+went\\s+up",
+      "crowd\\s+(louder)?",
       "applause\\s+erupted",
       "stands?\\s+erupted",
       "chant(ing)?\\s+from\\s+the\\s+crowd"
@@ -551,7 +552,7 @@
       "leaned\\s+without\\s+thinking",
       "shoulders?\\s+lifted",
       "bounced\\s+on\\s+toes",
-      "crowd\\s+cheered",
+      "crowd\\s+(cheered|louder)?",
       "cheers?\\s+of\\s+the\\s+crowd",
       "cheers?\\s+rose",
       "a\\s+roar\\s+went\\s+up",

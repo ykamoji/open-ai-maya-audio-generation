@@ -2,7 +2,7 @@ import re
 import inspect
 import torch
 from tqdm import tqdm
-from Emotions.utils import getModelAndTokenizer, encode_no_bos, fast_generate_sampling, clear_cache
+from Emotions.utils import getModelAndTokenizer, fast_generate_sampling, clear_cache, getDevice
 from utils import updateCache
 
 PROMPT_PREFIX = inspect.cleandoc(f"""
@@ -115,15 +115,16 @@ def getSummaries(content, model, tokenizer):
 
     response = set()
     try:
-        suffix_ids, suffix_attn = encode_no_bos(build_prompt(content), tokenizer, model.device)
-        if suffix_attn.shape[1] == 0:
-            suffix_attn = torch.ones((1, 1), device=suffix_attn.device)
-            suffix_ids = torch.full((1, 1), tokenizer.eos_token_id, device=suffix_ids.device)
-        full_attn = torch.cat([PREFIX_ATTN, suffix_attn], dim=1)
+        enc = tokenizer(build_prompt(content), return_tensors="pt", add_special_tokens=False).to(getDevice())
+        dyn_ids, dyn_attn = enc['input_ids'], enc['attention_mask']
+        if dyn_attn.shape[1] == 0:
+            dyn_attn = torch.ones((1, 1), device=dyn_attn.device)
+            dyn_ids = torch.full((1, 1), tokenizer.eos_token_id, device=dyn_ids.device)
+        full_attn = torch.cat([PREFIX_ATTN, dyn_attn], dim=1)
         with torch.inference_mode():
             generated = fast_generate_sampling(
                 model,
-                dynamic_ids=suffix_ids,
+                dynamic_ids=dyn_ids,
                 attention_mask=full_attn,
                 past_key_values=PREFIX_KV_CACHE,
                 max_new_tokens=150,
@@ -133,7 +134,7 @@ def getSummaries(content, model, tokenizer):
                 repetition_penalty=1.08
             )
 
-        decoded = generated[:, suffix_ids.shape[1]:]
+        decoded = generated[:, dyn_ids.shape[1]:]
         output = tokenizer.decode(decoded[0], skip_special_tokens=True)
         response = extractSuggestions(output)
     except Exception as e:
@@ -163,7 +164,8 @@ def summarization(Args, pages, notebook_name, section_name, TITLE_CACHE):
     model, tokenizer = getModelAndTokenizer(Args)
 
     global PREFIX_KV_CACHE, PREFIX_ATTN
-    prefix_ids, prefix_attn = encode_no_bos(PROMPT_PREFIX, tokenizer, model.device)
+    enc = tokenizer(PROMPT_PREFIX, return_tensors="pt").to(getDevice())
+    prefix_ids, prefix_attn = enc['input_ids'], enc['attention_mask']
     PREFIX_ATTN = prefix_attn
 
     with torch.inference_mode():

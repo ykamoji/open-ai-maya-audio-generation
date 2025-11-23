@@ -89,6 +89,7 @@ def paragraph_stylization(model, prompts, terminators, tokenizer, static_mask, p
                 return_tensors="pt",
                 padding=True,
                 truncation=False,
+                add_special_tokens=False,
             ).to(device)
 
             dyn_ids = dyn["input_ids"]

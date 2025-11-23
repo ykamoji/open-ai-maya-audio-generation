@@ -6,15 +6,18 @@ Graph:
   PageLimit:  # number(s) or empty
 Emotions:
   Quantize: False
-  ModelName: meta-llama/Llama-3.1-8B-Instruct # meta-llama/Llama-3.2-1B-Instruct
-  ModelPath:
+  ModelName:
+    Default: meta-llama/Llama-3.1-8B-Instruct
+    Kaggle: /kaggle/input/llama-3-1-8b-instruct/transformers/1/1/
+    Colab: meta-llama/Llama-3.1-8B-Instruct
+  CachePath:
     Default: /Users/ykamoji/Documents/open-ai-maya-audio-generation/models/
-    Kaggle: # For Kaggle, use internal cache
+    Kaggle: /kaggle/working/output/
     Colab: /content/open-ai-maya-audio-generation/Models/
 Generator:
-  PageLimit:  1 # number(s) or empty
+  PageLimit:  2 # number(s) or empty
   PageNo:
-  SkipTitleGeneration: False
+  SkipTitleGeneration: True
   AudioOutputPath:
     Default: output/
     Kaggle: /kaggle/working/output/

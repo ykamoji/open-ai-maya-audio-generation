@@ -12,6 +12,19 @@ sentence_regex = re.compile(
     '''
 )
 
+TONES = [
+    "[ANGRY]", "[EXCITED]", "[SARCASTIC]", "[CURIOUS]", "[SING]", "[APPALLED]", "[MISCHIEVOUS]", "[DISAPPOINTED]"
+]
+
+SOUNDS = [
+    "[LAUGH]", "[LAUGH_HARDER]", "[SIGH]", "[CHUCKLE]", "[GASP]", "[CRY]", "[SCREAM]", "[WHISPER]", "[SNORT]",
+    "[EXHALE]", "[GULP]", "[GIGGLE]"
+]
+
+TTS_TAGS = TONES + SOUNDS
+
+TTS_TAGS_STR = ", ".join(TTS_TAGS)
+
 
 def getDevice():
     device = "cpu"
@@ -31,11 +44,11 @@ def clear_cache():
 
 
 def getModelAndTokenizer(Args):
-
-    MODEL_PATH = Args.Emotions.ModelPath.__dict__[Args.Platform]
-    MADEL_NAME = Args.Emotions.ModelName
+    MODEL_NAME = Args.Emotions.ModelName.__dict__[Args.Platform]
+    CACHE_PATH = Args.Emotions.CachePath.__dict__[Args.Platform]
 
     quantize, platform = Args.Emotions.Quantize, Args.Platform
+
 
     if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
         DTYPE = torch.bfloat16
@@ -52,11 +65,18 @@ def getModelAndTokenizer(Args):
             llm_int8_enable_fp32_cpu_offload=False
         )
 
+    tokenizer = AutoTokenizer.from_pretrained(
+        MODEL_NAME,
+        cache_dir=CACHE_PATH,
+        use_fast=True,
+        padding_side="left"
+    )
+
     model = AutoModelForCausalLM.from_pretrained(
-        MADEL_NAME if platform != 'Kaggle' else "/kaggle/input/llama-3-1-8b-instruct/transformers/1/1/Model",
-        cache_dir=MODEL_PATH,
+        MODEL_NAME,
+        cache_dir=CACHE_PATH,
         quantization_config=bnb_config,
-        device_map="balanced",
+        device_map="cpu",
         torch_dtype=DTYPE,
         load_in_4bit=False,
         load_in_8bit=False
@@ -64,32 +84,12 @@ def getModelAndTokenizer(Args):
 
     model.eval()
 
-    model.generation_config.return_legacy_cache = True
-
-    tokenizer = AutoTokenizer.from_pretrained(
-        MADEL_NAME if platform != 'Kaggle' else "/kaggle/input/llama-3-1-8b-instruct/transformers/1/1/Tokenizer",
-        use_fast=True,
-        padding_side="left",
-        cache_dir=MODEL_PATH)
-
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.pad_token_id = tokenizer.eos_token_id
     model.config.pad_token_id = tokenizer.eos_token_id
 
     return model, tokenizer
-
-
-def encode_no_bos(text, tokenizer, device):
-    ids = tokenizer.encode(text, add_special_tokens=False)
-
-    bos_id = tokenizer.bos_token_id
-    if bos_id is not None and len(ids) > 0 and ids[0] == bos_id:
-        ids = ids[1:]
-
-    tensor = torch.tensor([ids], device=device)
-    attn = torch.ones_like(tensor)
-    return tensor, attn
 
 
 def split_sentences(text: str):
@@ -100,10 +100,19 @@ def split_sentences(text: str):
 def repeat_past_kv(past_key_values, batch_size):
     new_past = []
     for k, v in past_key_values:
-        k_rep = k.repeat(batch_size, 1, 1, 1)
-        v_rep = v.repeat(batch_size, 1, 1, 1)
-        new_past.append((k_rep, v_rep))
+        k_exp = k.expand(batch_size, -1, -1, -1).contiguous()
+        v_exp = v.expand(batch_size, -1, -1, -1).contiguous()
+        new_past.append((k_exp, v_exp))
     return tuple(new_past)
+
+
+def slice_prefix_kv(prefix_kv_big, batch_size):
+    sliced = []
+    for k_big, v_big in prefix_kv_big:
+        k_small = k_big[:batch_size]
+        v_small = v_big[:batch_size]
+        sliced.append((k_small, v_small))
+    return tuple(sliced)
 
 
 @torch.inference_mode()
@@ -194,17 +203,17 @@ def fast_generate(
 
 @torch.inference_mode()
 def fast_generate_sampling(
-    model,
-    dynamic_ids: torch.Tensor,
-    attention_mask: torch.Tensor,
-    past_key_values=None,
-    max_new_tokens: int = 128,
-    eos_token_id=None,
-    temperature: float = 1.0,
-    top_k: int = 0,
-    top_p: float = 1.0,
-    repetition_penalty: float = 1.0,
-    min_new_tokens: int = 0,
+        model,
+        dynamic_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        past_key_values=None,
+        max_new_tokens: int = 128,
+        eos_token_id=None,
+        temperature: float = 1.0,
+        top_k: int = 0,
+        top_p: float = 1.0,
+        repetition_penalty: float = 1.0,
+        min_new_tokens: int = 0,
 ):
     """
     Trimmed KV-cached HF-compatible sampler.

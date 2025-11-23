@@ -7,12 +7,14 @@ import re
 import argparse
 import soundfile as sf
 import numpy as np
+import logging
 
-from Emotions.postProcess import voice_post_process
+from Emotions.emotionPlacement import insertEmotions
+from Emotions.postProcess import voice_post_process, emotion_det_post_process, emotion_inst_post_process
 from Emotions.sumerization import summarization
 from utils import create_or_load_Cache
 from Emotions.stylize import stylize
-from Emotions.emotions import addEmotions
+from Emotions.emotionDetection import detectEmotions
 from utils import CustomObject, get_yaml_loader, updateCache
 from Generator.OpenAI import convert as openAIConvert
 from Generator.Maya import convert as mayaConvert
@@ -23,6 +25,12 @@ os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
 os.environ["ABSL_LOGGING_THRESHOLD"] = "fatal"
 os.environ["XLA_FLAGS"] = "--xla_gpu_cuda_data_dir="
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+
+logging.basicConfig(
+    filename='emotions.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 
 class VoiceGenerator:
@@ -48,6 +56,8 @@ class VoiceGenerator:
 
         self.TITLE_CACHE = create_or_load_Cache('titleCache.json')
         self.VOICE_CACHE = create_or_load_Cache('voiceCache.json')
+        # self.EMOTION_DET_CACHE = create_or_load_Cache('emotionDetCache.json')
+        # self.EMOTION_INS_CACHE = create_or_load_Cache('emotionInsCache.json')
         self.EMOTION_CACHE = create_or_load_Cache('emotionCache.json')
 
     def load_content(self):
@@ -69,6 +79,33 @@ class VoiceGenerator:
             title = random.choice(titles["suggestion"])
 
         return f"Chapter {number}." + (f" {title}" if title else "")
+
+    def check_detection_emotion_post_process(self, title):
+        lines = self.EMOTION_CACHE[self.Args.Graph.NotebookName][self.Args.Graph.SectionName][title]
+        run_post_process = False
+        for l in lines:
+            if "output" in l:
+                run_post_process = True
+                break
+        return run_post_process
+
+    def check_insertion_emotion(self, title):
+        lines = self.EMOTION_CACHE[self.Args.Graph.NotebookName][self.Args.Graph.SectionName][title]
+        run_post_process = False
+        for l in lines:
+            if "messages" in l:
+                run_post_process = True
+                break
+        return run_post_process
+
+    def check_insertion_emotion_post_process(self, title):
+        lines = self.EMOTION_CACHE[self.Args.Graph.NotebookName][self.Args.Graph.SectionName][title]
+        run_post_process = False
+        for l in lines:
+            if type(l) == dict:
+                run_post_process = True
+                break
+        return run_post_process
 
     def generation(self):
 
@@ -97,27 +134,28 @@ class VoiceGenerator:
             if contents_to_process:
                 print(f"\nProcessing stylization for {notebook_name} {section_name}.")
                 print(f"Need to stylize {len(contents_to_process)} page(s)")
-                spell_checked_paragraphs = stylize(self.Args, contents_to_process, notebook_name, section_name, self.VOICE_CACHE)
+                spell_checked_paragraphs = stylize(self.Args, contents_to_process, notebook_name, section_name,
+                                                   self.VOICE_CACHE)
                 if spell_checked_paragraphs == len(contents_to_process):
                     print(f"Stylize completed!")
                 else:
                     print(f"Something went wrong! Check the logs.")
 
         if self.Args.Step >= 2:
-            print(f"Starting post processing for voice texts.")
-            voice_cache = self.VOICE_CACHE[notebook_name][section_name]
-            self.VOICE_CACHE[notebook_name][section_name] = voice_post_process(voice_cache)
+            print(f"Post processing voice texts for {notebook_name} {section_name}.")
+            emotion_cache = self.VOICE_CACHE[notebook_name][section_name]
+            self.VOICE_CACHE[notebook_name][section_name] = voice_post_process(emotion_cache)
             updateCache('voiceCache.json', self.VOICE_CACHE)
-            print(f"Post processing completed voice texts.")
+            print(f"Post processing voice texts completed for {notebook_name} {section_name}.")
 
         if self.Args.Step >= 3 and not self.Args.Generator.SkipTitleGeneration:
             print(f"\nStarting summarization for {notebook_name} {section_name}.")
             contents_to_process = []
-            voice_cache = self.VOICE_CACHE[notebook_name][section_name]
+            emotion_cache = self.VOICE_CACHE[notebook_name][section_name]
             for page in pages[:limit]:
                 contents_to_process.append({
                     "title": page["title"],
-                    "content": voice_cache[page["title"]],
+                    "content": emotion_cache[page["title"]],
                 })
 
             if contents_to_process:
@@ -130,14 +168,14 @@ class VoiceGenerator:
                             "best": "",
                             "suggestions": set(),
                         }
-                summarized_paragraphs = summarization(self.Args, contents_to_process, notebook_name, section_name, self.TITLE_CACHE)
+                summarized_paragraphs = summarization(self.Args, contents_to_process, notebook_name, section_name,
+                                                      self.TITLE_CACHE)
                 if summarized_paragraphs == len(contents_to_process):
                     print(f"Summarization completed!")
                 else:
                     print(f"Something went wrong! Check the logs.")
 
         if self.Args.Step >= 4:
-            print(f"Creating Emotions for {notebook_name} {section_name}")
             contents_to_process = []
             voice_cache = self.VOICE_CACHE[notebook_name][section_name]
             nb_cache = self.EMOTION_CACHE.setdefault(notebook_name, {})
@@ -147,18 +185,72 @@ class VoiceGenerator:
                     contents_to_process.append(
                         {
                             "title": page["title"],
-                            "suggested_title": self.add_title(notebook_name, section_name, page["title"]),
                             "content": voice_cache[page["title"]]
                         })
             if contents_to_process:
-                print(f"Need to add emotions to {len(contents_to_process)} page(s)")
-                emotion_paragraphs = addEmotions(self.Args, contents_to_process, notebook_name, section_name, self.EMOTION_CACHE)
+                print(f"Detecting Emotions for {notebook_name} {section_name}")
+                print(f"Need to detect emotions for {len(contents_to_process)} page(s)")
+                emotion_paragraphs = detectEmotions(self.Args, contents_to_process, notebook_name, section_name,
+                                                    self.EMOTION_CACHE)
                 if emotion_paragraphs == len(contents_to_process):
                     print(f"Emotion adding completed!")
                 else:
                     print(f"Something went wrong! Check the logs.")
 
-        if self.Args.Step == 5:
+        if self.Args.Step >= 5:
+            print(f"Post processing Emotions (Detection) for {notebook_name} {section_name}")
+            emotion_cache = self.EMOTION_CACHE[notebook_name][section_name]
+            nb_cache = self.EMOTION_CACHE.setdefault(notebook_name, {})
+            sec_cache = nb_cache.setdefault(section_name, {})
+            for page in pages[:limit]:
+                if self.check_detection_emotion_post_process(page["title"]):
+                    sec_cache[page["title"]] = emotion_det_post_process(emotion_cache[page["title"]], page["title"])
+
+            updateCache("emotionCache.json", self.EMOTION_CACHE)
+            print(f"Post processing Emotions (Detection) completed for {notebook_name} {section_name}")
+
+        if self.Args.Step >= 6:
+            contents_to_process = []
+            nb_cache = self.EMOTION_CACHE.setdefault(notebook_name, {})
+            sec_cache = nb_cache.setdefault(section_name, {})
+            for page in pages[:limit]:
+                if self.check_insertion_emotion(page["title"]):
+                    lines = []
+                    for L in sec_cache[page['title']]:
+                        content = {
+                            'line': L['line'],
+                        }
+                        if 'tag' in L and L['tag']: content['tag'] = L['tag']
+                        lines.append(content)
+
+                    contents_to_process.append(
+                        {
+                            "title": page["title"],
+                            "lines": lines
+                        })
+            if contents_to_process:
+                print(f"Inserting emotions for {notebook_name} {section_name}")
+                print(f"Need to add emotions to {len(contents_to_process)} page(s)")
+                emotion_paragraphs = insertEmotions(self.Args, contents_to_process, notebook_name, section_name,
+                                                    self.EMOTION_CACHE)
+                if emotion_paragraphs == len(contents_to_process):
+                    print(f"Emotion insertion completed!")
+                else:
+                    print(f"Something went wrong! Check the logs.")
+
+        if self.Args.Step >= 7:
+            print(f"Post processing Emotions (Insertion) for {notebook_name} {section_name}")
+            emotion_cache = self.EMOTION_CACHE[notebook_name][section_name]
+            nb_cache = self.EMOTION_CACHE.setdefault(notebook_name, {})
+            sec_cache = nb_cache.setdefault(section_name, {})
+            for page in pages[:limit]:
+                if self.check_insertion_emotion_post_process(page["title"]):
+                    sec_cache[page["title"]] = emotion_inst_post_process(emotion_cache[page["title"]], page["title"])
+                    sec_cache[page["title"]].insert(0, self.add_title(notebook_name, section_name, page["title"]))
+            updateCache("emotionCache.json", self.EMOTION_CACHE)
+            print(f"Post processing Emotions (Insertion) completed for {notebook_name} {section_name}")
+
+        if self.Args.Step == 8:
             outputPath = self.Args.Generator.AudioOutputPath.__dict__[self.Args.Platform]
             nb_cache = self.EMOTION_CACHE.setdefault(notebook_name, {})
             sec_cache = nb_cache.setdefault(section_name, {})
