@@ -147,22 +147,22 @@ def process_emotions(L):
     if tags:
         messages += [f"Model returned {tags} emotions for \"{line}\""]
 
-    # try:
-    #     candidate_tags = [
-    #         t.replace("[", "").replace("]", "").lower()
-    #         for t in tags
-    #     ]
-    #     updated, scores = rerank(line, candidate_tags, genre="YA", top_k=2)
-    #     if len(tags) > 0:
-    #         if len(updated) == 0 or tags[0] != updated[0]:
-    #             messages += [f"Re ranking updated from {tags} to {updated} ({scores}) emotions for \"{line}\""]
-    # except Exception as e:
-    #     messages += [f"Error re ranking emotions for \"{line}\""]
-    #     updated = tags
-    #
-    # best = updated[0] if updated else None
+    try:
+        candidate_tags = [
+            t.replace("[", "").replace("]", "").lower()
+            for t in tags
+        ]
+        updated, scores = rerank(line, candidate_tags, genre="YA", top_k=2)
+        if len(tags) > 0:
+            if len(updated) == 0 or tags[0] != updated[0]:
+                messages += [f"Re ranking updated from {tags} to {updated} ({scores}) emotions for \"{line}\""]
+    except Exception as e:
+        messages += [f"Error re ranking emotions for \"{line}\""]
+        updated = tags
 
-    best = tags[0] if tags else None
+    best = updated[0] if updated else None
+
+    # best = tags[0] if tags else None
 
     processed = {
         "line": L["line"],

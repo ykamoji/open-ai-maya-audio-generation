@@ -66,7 +66,7 @@ def init_static_placement_cache(tokenizer, model, BATCH_SIZE):
 
     global PLACEMENT_STATIC_MASK, PLACEMENT_STATIC_BATCH_PAST
 
-    if PLACEMENT_STATIC_MASK and PLACEMENT_STATIC_BATCH_PAST:
+    if PLACEMENT_STATIC_MASK is not None and PLACEMENT_STATIC_BATCH_PAST is not None:
         return  # already initialized
 
     device = next(model.parameters()).device
@@ -88,7 +88,7 @@ def init_static_placement_cache(tokenizer, model, BATCH_SIZE):
     PLACEMENT_STATIC_BATCH_PAST = repeat_past_kv(placement_static_past, BATCH_SIZE)
 
 
-def insert_emotion_index(sentences, tags, model, tokenizer, BATCH_SIZE=16):
+def insert_emotion_index(sentences, tags, model, tokenizer, BATCH_SIZE=20):
     N = len(sentences)
     device = next(model.parameters()).device
     placement_indexes = []
@@ -101,7 +101,7 @@ def insert_emotion_index(sentences, tags, model, tokenizer, BATCH_SIZE=16):
         batch_sentences = sentences[start:start + BATCH_SIZE]
         batch_tags = tags[start:start + BATCH_SIZE]
 
-        dynamic_texts = [build_placement_dynamic(t, s) for t, s in zip(batch_sentences, batch_tags)]
+        dynamic_texts = [build_placement_dynamic(t, s) for t, s in zip(batch_tags, batch_sentences)]
 
         dyn_enc = tokenizer(dynamic_texts, return_tensors="pt", padding=True, add_special_tokens=False).to(device)
 

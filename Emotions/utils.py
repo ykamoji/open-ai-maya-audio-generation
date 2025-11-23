@@ -76,7 +76,7 @@ def getModelAndTokenizer(Args):
         MODEL_NAME,
         cache_dir=CACHE_PATH,
         quantization_config=bnb_config,
-        device_map="cpu",
+        device_map="balanced",
         torch_dtype=DTYPE,
         load_in_4bit=False,
         load_in_8bit=False

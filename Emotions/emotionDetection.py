@@ -93,7 +93,7 @@ DETECTION_STATIC_BATCH_PAST = None
 def init_detection_prefix_cache(model, tokenizer, BATCH_SIZE):
     global DETECTION_STATIC_MASK, DETECTION_STATIC_BATCH_PAST
 
-    if DETECTION_STATIC_MASK and DETECTION_STATIC_BATCH_PAST:
+    if DETECTION_STATIC_MASK is not None and DETECTION_STATIC_BATCH_PAST is not None:
         return  # already initialized
 
     device = next(model.parameters()).device
