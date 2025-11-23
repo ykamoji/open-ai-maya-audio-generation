@@ -115,7 +115,7 @@ def init_detection_prefix_cache(model, tokenizer, BATCH_SIZE):
     DETECTION_STATIC_BATCH_PAST = repeat_past_kv(detection_static_past, BATCH_SIZE)
 
 
-def detect_batch(indices, sentences, model, tokenizer, BATCH_SIZE: int = 4):
+def detect_batch(indices, sentences, model, tokenizer, BATCH_SIZE: int = 20):
     global DETECTION_STATIC_MASK, DETECTION_STATIC_BATCH_PAST
 
     device = next(model.parameters()).device

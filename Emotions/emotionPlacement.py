@@ -88,7 +88,7 @@ def init_static_placement_cache(tokenizer, model, BATCH_SIZE):
     PLACEMENT_STATIC_BATCH_PAST = repeat_past_kv(placement_static_past, BATCH_SIZE)
 
 
-def insert_emotion_index(sentences, tags, model, tokenizer, BATCH_SIZE = 4):
+def insert_emotion_index(sentences, tags, model, tokenizer, BATCH_SIZE=16):
     N = len(sentences)
     device = next(model.parameters()).device
     placement_indexes = []
