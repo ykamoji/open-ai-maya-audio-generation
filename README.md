@@ -29,6 +29,6 @@ snac
 
 #### Voice Generation Args
 ```
-./start.sh --config Kaggle --pageNums "[15]" --genPgL 1 --step "[0]"
+./start.sh --config Kaggle --pageNums "[15]" --genPgL "[0,None]" --step "[0]"
 ```
 
