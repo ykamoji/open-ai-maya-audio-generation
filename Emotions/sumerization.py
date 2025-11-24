@@ -182,11 +182,15 @@ def summarization(Args, pages, notebook_name, section_name, TITLE_CACHE):
         try:
             summary = getSummaries(page['content'], model, tokenizer)
             if summary:
-                content = TITLE_CACHE[notebook_name][section_name][page["title"]]
-                content["suggestions"] = set(content.get("suggestions", []))
+                title_cache = TITLE_CACHE[notebook_name][section_name].get(page["title"], {})
+                content = {
+                    "suggestions": set(title_cache.get("suggestions", [])),
+                    "best": title_cache.get("best", "")
+                }
                 content["suggestions"] |= summary
                 content["suggestions"] = list(content["suggestions"])
                 content["suggestions"].sort()
+                TITLE_CACHE[notebook_name][section_name][page["title"]] = content
                 updateCache('titleCache.json', TITLE_CACHE)
                 processed += 1
             else:

@@ -25,10 +25,6 @@ while [[ "$#" -gt 0 ]]; do
       pageNums="$2"
       shift 2
       ;;
-    --title)
-      title="$2"
-      shift 2
-      ;;
     --step)
       step="$2"
       shift 2
@@ -51,7 +47,6 @@ args2=()
 [[ -n "$config" ]] && args2+=("--config" "$config")
 [[ -n "$genPgL" ]] && args2+=("--pageLimit" "$genPgL")
 [[ -n "$pageNums" ]] && args2+=("--pageNums" "$pageNums")
-[[ -n "$title" ]] && args2+=("--titleGeneration" "$title")
 [[ -n "$step" ]] && args2+=("--step" "$step")
 
 
@@ -60,10 +55,12 @@ args2=()
 echo ">> Checking if everything is ready"
 echo ">> Running: python3 init.py ${args1[*]}"
 python3 init.py "${args1[@]}"
+echo
 echo "All Set !"
-
-
+echo
 echo ">> Running Voice generation steps"
 echo ">> Running: python3 voiceGenerator.py ${args2[*]}"
 python3 voiceGenerator.py "${args2[@]}"
+echo
 echo "Done"
+echo

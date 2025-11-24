@@ -24,16 +24,11 @@ snac
 
 #### Initiation Args
 ```
-./start.sh --refreshPages True \
-            --graphPgL 1
+./start.sh --refreshPages True --graphPgL 1
 ```
 
 #### Voice Generation Args
 ```
-./start.sh --config Kaggle \
-           --title true \
-           --pageNums "[15]" \
-           --genPgL 1 \
-           --step 0
+./start.sh --config Kaggle --pageNums "[15]" --genPgL 1 --step "[0]"
 ```
 
