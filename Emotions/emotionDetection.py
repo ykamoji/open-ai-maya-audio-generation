@@ -115,7 +115,7 @@ def init_detection_prefix_cache(model, tokenizer, BATCH_SIZE):
     DETECTION_STATIC_BATCH_PAST = repeat_past_kv(detection_static_past, BATCH_SIZE)
 
 
-def detect_batch(indices, sentences, model, tokenizer, BATCH_SIZE: int = 20):
+def detect_batch(title, indices, sentences, model, tokenizer, BATCH_SIZE: int = 20):
     global DETECTION_STATIC_MASK, DETECTION_STATIC_BATCH_PAST
 
     device = next(model.parameters()).device
@@ -123,7 +123,7 @@ def detect_batch(indices, sentences, model, tokenizer, BATCH_SIZE: int = 20):
 
     outputs = ["" for _ in range(len(indices))]
 
-    for start in tqdm(range(0, len(indices), BATCH_SIZE), desc="Paragraphs", ncols=90, position=1):
+    for start in tqdm(range(0, len(indices), BATCH_SIZE), desc=f"{title}", ncols=90, position=1):
         chunk = indices[start:start + BATCH_SIZE]
 
         dynamic_prompts = []
@@ -204,7 +204,7 @@ def detectEmotions(Args, pages, notebook_name, section_name, EMOTION_CACHE):
                 lines.extend(split_sentences(paragraph))
 
             indices = list(range(len(lines)))
-            output = detect_batch(indices, lines, model, tokenizer)
+            output = detect_batch(page["title"], indices, lines, model, tokenizer)
             if output:
                 line_outputs = []
                 for line_idx, o in enumerate(output):

@@ -71,6 +71,14 @@ def create_or_load_Cache(file):
     return CACHE
 
 
+def getChapterNo(title):
+    return int(re.search(r'\d+', title).group())
+
+
+def create_backup(step, cache):
+    updateCache(f'backups/{step}.json', cache)
+
+
 def updateCache(file, data):
     with open(file, 'w') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)

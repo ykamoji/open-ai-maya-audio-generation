@@ -61,7 +61,7 @@ def stylize(Args, pages, notebook_name, section_name, VOICE_CACHE):
         try:
             chunks = createChunks(content, limit=2000)
             prompts = generate_prompts(chunks)
-            outputs = paragraph_stylization(model, prompts, terminators, tokenizer, static_mask, past_batch, BATCH_SIZE)
+            outputs = paragraph_stylization(page["title"], model, prompts, terminators, tokenizer, static_mask, past_batch, BATCH_SIZE)
 
             # Save the page generated
             if outputs:
@@ -78,10 +78,10 @@ def stylize(Args, pages, notebook_name, section_name, VOICE_CACHE):
     return processed
 
 
-def paragraph_stylization(model, prompts, terminators, tokenizer, static_mask, past_batch, BATCH_SIZE):
+def paragraph_stylization(title, model, prompts, terminators, tokenizer, static_mask, past_batch, BATCH_SIZE):
     outputs = []
     device = next(model.parameters()).device
-    for i in tqdm(range(0, len(prompts), BATCH_SIZE), desc="Paragraphs", ncols=90, position=1):
+    for i in tqdm(range(0, len(prompts), BATCH_SIZE), desc=f"{title}", ncols=90, position=1):
         try:
             batch_prompts = prompts[i: i + BATCH_SIZE]
             dyn = tokenizer(

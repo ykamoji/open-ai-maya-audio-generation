@@ -15,9 +15,9 @@ Emotions:
     Kaggle: /kaggle/working/output/
     Colab: /content/open-ai-maya-audio-generation/Models/
 Generator:
-  PageLimit:  2 # number(s) or empty
-  PageNo:
-  SkipTitleGeneration: True
+  PageLimit:  # number or empty
+  PageNums: # [numbers] or empty
+  TitleGeneration: False
   AudioOutputPath:
     Default: output/
     Kaggle: /kaggle/working/output/

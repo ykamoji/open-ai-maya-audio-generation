@@ -288,8 +288,8 @@ def rerank(text, model_tags, genre="normal", top_k=2):
 # ---------------------------------------------------------
 
 if __name__ == "__main__":
-    curr_s = "The roar of the crowd grew louder as I approached the gate leading to the coliseum field."
+    curr_s = "As soon as I heard him walk towards him in shock, I faced him, my voice rising."
 
-    model_tags = ['EXCITED']
+    model_tags = ['ANGRY','EXCITED']
 
     print(rerank(curr_s, [t.lower() for t in model_tags], genre="YA"))

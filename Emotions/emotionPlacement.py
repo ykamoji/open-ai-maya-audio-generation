@@ -88,7 +88,7 @@ def init_static_placement_cache(tokenizer, model, BATCH_SIZE):
     PLACEMENT_STATIC_BATCH_PAST = repeat_past_kv(placement_static_past, BATCH_SIZE)
 
 
-def insert_emotion_index(sentences, tags, model, tokenizer, BATCH_SIZE=20):
+def insert_emotion_index(title, sentences, tags, model, tokenizer, BATCH_SIZE=20):
     N = len(sentences)
     device = next(model.parameters()).device
     placement_indexes = []
@@ -97,7 +97,7 @@ def insert_emotion_index(sentences, tags, model, tokenizer, BATCH_SIZE=20):
 
     init_static_placement_cache(tokenizer, model, BATCH_SIZE)
 
-    for start in tqdm(range(0, N, BATCH_SIZE), desc="Emotes", ncols=90, position=1):
+    for start in tqdm(range(0, N, BATCH_SIZE), desc=f"{title}", ncols=90, position=1):
         batch_sentences = sentences[start:start + BATCH_SIZE]
         batch_tags = tags[start:start + BATCH_SIZE]
 
@@ -173,7 +173,7 @@ def insertEmotions(Args, pages, notebook_name, section_name, EMOTION_CACHE):
                     lines.append(L['line'])
 
             if sentences:
-                placement_indexes = insert_emotion_index(sentences, tags, model, tokenizer)
+                placement_indexes = insert_emotion_index(page['title'], sentences, tags, model, tokenizer)
                 if placement_indexes:
                     for idx, placement in enumerate(placement_indexes):
                         lines.insert(insert_line_pos[idx], {
@@ -190,8 +190,9 @@ def insertEmotions(Args, pages, notebook_name, section_name, EMOTION_CACHE):
         except Exception as e:
             print(f"Exception: {e}. Skipping {page['title']}.")
 
-    # global PLACEMENT_PREFIX_CACHE
-    PLACEMENT_PREFIX_CACHE = {}
+    global PLACEMENT_STATIC_MASK, PLACEMENT_STATIC_BATCH_PAST
+    PLACEMENT_STATIC_MASK = None
+    PLACEMENT_STATIC_BATCH_PAST = None
     clear_cache()
 
     return progress

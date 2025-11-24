@@ -12,7 +12,7 @@ import logging
 from Emotions.emotionPlacement import insertEmotions
 from Emotions.postProcess import voice_post_process, emotion_det_post_process, emotion_inst_post_process
 from Emotions.sumerization import summarization
-from utils import create_or_load_Cache
+from utils import create_or_load_Cache, create_backup, getChapterNo
 from Emotions.stylize import stylize
 from Emotions.emotionDetection import detectEmotions
 from utils import CustomObject, get_yaml_loader, updateCache
@@ -25,6 +25,7 @@ os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
 os.environ["ABSL_LOGGING_THRESHOLD"] = "fatal"
 os.environ["XLA_FLAGS"] = "--xla_gpu_cuda_data_dir="
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 logging.basicConfig(
     filename='emotions.log',
@@ -37,9 +38,12 @@ class VoiceGenerator:
 
     def __init__(self):
 
-        parser = argparse.ArgumentParser(description="Initidate data")
+        parser = argparse.ArgumentParser(description="Generation")
         parser.add_argument("--config", type=str, default="Default", help="Configuration file")
-        parser.add_argument("--step", type=str, default="0", help="Step definition")
+        parser.add_argument("--pageLimit", type=int, default=None, help="PageLimit")
+        parser.add_argument("--pageNums", type=json.loads, default=None, help="List of Page Numbers to run")
+        parser.add_argument("--step", type=int, default=0, help="Step definition")
+        parser.add_argument("--titleGeneration", type=bool, default=True, help="TitleGeneration")
         args = parser.parse_args()
 
         with open('default.yaml', 'r') as file:
@@ -49,15 +53,18 @@ class VoiceGenerator:
         self.Args = json.loads(x, object_hook=lambda d: CustomObject(**d))
 
         self.Args.Platform = args.config
-        self.Args.Step = int(args.step)
+        self.Args.Step = args.step
+
+        self.Args.Generator.PageLimit = args.pageLimit
+        self.Args.Generator.TitleGeneration = args.titleGeneration
+        self.PageNums = self.Args.Generator.PageNums
+        self.PageNums = args.pageNums if args.pageNums else self.PageNums
 
         with open('contentCache.json') as f:
             self.CONTENT_CACHE = json.load(f)
 
         self.TITLE_CACHE = create_or_load_Cache('titleCache.json')
         self.VOICE_CACHE = create_or_load_Cache('voiceCache.json')
-        # self.EMOTION_DET_CACHE = create_or_load_Cache('emotionDetCache.json')
-        # self.EMOTION_INS_CACHE = create_or_load_Cache('emotionInsCache.json')
         self.EMOTION_CACHE = create_or_load_Cache('emotionCache.json')
 
     def load_content(self):
@@ -107,6 +114,28 @@ class VoiceGenerator:
                 break
         return run_post_process
 
+    def checkPageExist(self, step):
+        cache = {}
+        if step == 'voice':
+            cache = self.VOICE_CACHE
+        elif step == 'title':
+            cache = self.TITLE_CACHE
+        elif step == 'emotion':
+            cache = self.EMOTION_CACHE
+        section = cache.get(self.Args.Graph.NotebookName, {}).get(self.Args.Graph.SectionName, {})
+        return (cache, section) if section else (None, None)
+
+    def sort(self):
+        for step in ["voice", "title", "emotion"]:
+            cache, section = self.checkPageExist(step)
+            if section:
+                section = dict(sorted(section.items(), key=lambda page: getChapterNo(page[0])))
+                cache[self.Args.Graph.NotebookName][self.Args.Graph.SectionName] = section
+            updateCache(step+"Cache.json", cache)
+
+    def checkInPageNums(self, title):
+        return self.PageNums and getChapterNo(title) in self.PageNums
+
     def generation(self):
 
         notebook_name = self.Args.Graph.NotebookName
@@ -125,7 +154,7 @@ class VoiceGenerator:
             sec_cache = nb_cache.setdefault(section_name, {})
 
             for page in pages[:limit]:
-                if page["title"] not in sec_cache:
+                if page["title"] not in sec_cache or self.checkInPageNums(page["title"]):
                     contents_to_process.append(page)
 
             for content in contents_to_process:
@@ -136,6 +165,7 @@ class VoiceGenerator:
                 print(f"Need to stylize {len(contents_to_process)} page(s)")
                 spell_checked_paragraphs = stylize(self.Args, contents_to_process, notebook_name, section_name,
                                                    self.VOICE_CACHE)
+                self.sort()
                 if spell_checked_paragraphs == len(contents_to_process):
                     print(f"Stylize completed!")
                 else:
@@ -145,18 +175,20 @@ class VoiceGenerator:
             print(f"Post processing voice texts for {notebook_name} {section_name}.")
             emotion_cache = self.VOICE_CACHE[notebook_name][section_name]
             self.VOICE_CACHE[notebook_name][section_name] = voice_post_process(emotion_cache)
+            self.sort()
             updateCache('voiceCache.json', self.VOICE_CACHE)
             print(f"Post processing voice texts completed for {notebook_name} {section_name}.")
 
-        if self.Args.Step >= 3 and not self.Args.Generator.SkipTitleGeneration:
+        if self.Args.Step >= 3 and self.Args.Generator.titleGeneration:
             print(f"\nStarting summarization for {notebook_name} {section_name}.")
             contents_to_process = []
             emotion_cache = self.VOICE_CACHE[notebook_name][section_name]
             for page in pages[:limit]:
-                contents_to_process.append({
-                    "title": page["title"],
-                    "content": emotion_cache[page["title"]],
-                })
+                if self.checkInPageNums(page["title"]):
+                    contents_to_process.append({
+                        "title": page["title"],
+                        "content": emotion_cache[page["title"]],
+                    })
 
             if contents_to_process:
                 print(f"Need to summarize {len(contents_to_process)} page(s)")
@@ -170,6 +202,7 @@ class VoiceGenerator:
                         }
                 summarized_paragraphs = summarization(self.Args, contents_to_process, notebook_name, section_name,
                                                       self.TITLE_CACHE)
+                self.sort()
                 if summarized_paragraphs == len(contents_to_process):
                     print(f"Summarization completed!")
                 else:
@@ -181,7 +214,7 @@ class VoiceGenerator:
             nb_cache = self.EMOTION_CACHE.setdefault(notebook_name, {})
             sec_cache = nb_cache.setdefault(section_name, {})
             for page in pages[:limit]:
-                if page["title"] not in sec_cache:
+                if page["title"] not in sec_cache or self.checkInPageNums(page["title"]):
                     contents_to_process.append(
                         {
                             "title": page["title"],
@@ -192,6 +225,9 @@ class VoiceGenerator:
                 print(f"Need to detect emotions for {len(contents_to_process)} page(s)")
                 emotion_paragraphs = detectEmotions(self.Args, contents_to_process, notebook_name, section_name,
                                                     self.EMOTION_CACHE)
+
+                create_backup('detection', self.EMOTION_CACHE)
+                self.sort()
                 if emotion_paragraphs == len(contents_to_process):
                     print(f"Emotion adding completed!")
                 else:
@@ -203,10 +239,12 @@ class VoiceGenerator:
             nb_cache = self.EMOTION_CACHE.setdefault(notebook_name, {})
             sec_cache = nb_cache.setdefault(section_name, {})
             for page in pages[:limit]:
-                if self.check_detection_emotion_post_process(page["title"]):
+                if self.check_detection_emotion_post_process(page["title"]) or self.checkInPageNums(page["title"]):
                     sec_cache[page["title"]] = emotion_det_post_process(emotion_cache[page["title"]], page["title"])
 
+            create_backup('detection_post',self.EMOTION_CACHE)
             updateCache("emotionCache.json", self.EMOTION_CACHE)
+            self.sort()
             print(f"Post processing Emotions (Detection) completed for {notebook_name} {section_name}")
 
         if self.Args.Step >= 6:
@@ -214,7 +252,7 @@ class VoiceGenerator:
             nb_cache = self.EMOTION_CACHE.setdefault(notebook_name, {})
             sec_cache = nb_cache.setdefault(section_name, {})
             for page in pages[:limit]:
-                if self.check_insertion_emotion(page["title"]):
+                if self.check_insertion_emotion(page["title"]) or self.checkInPageNums(page["title"]):
                     lines = []
                     for L in sec_cache[page['title']]:
                         content = {
@@ -233,6 +271,9 @@ class VoiceGenerator:
                 print(f"Need to add emotions to {len(contents_to_process)} page(s)")
                 emotion_paragraphs = insertEmotions(self.Args, contents_to_process, notebook_name, section_name,
                                                     self.EMOTION_CACHE)
+
+                create_backup('insertion', self.EMOTION_CACHE)
+                self.sort()
                 if emotion_paragraphs == len(contents_to_process):
                     print(f"Emotion insertion completed!")
                 else:
@@ -244,10 +285,11 @@ class VoiceGenerator:
             nb_cache = self.EMOTION_CACHE.setdefault(notebook_name, {})
             sec_cache = nb_cache.setdefault(section_name, {})
             for page in pages[:limit]:
-                if self.check_insertion_emotion_post_process(page["title"]):
+                if self.check_insertion_emotion_post_process(page["title"]) or self.checkInPageNums(page["title"]):
                     sec_cache[page["title"]] = emotion_inst_post_process(emotion_cache[page["title"]], page["title"])
                     sec_cache[page["title"]].insert(0, self.add_title(notebook_name, section_name, page["title"]))
             updateCache("emotionCache.json", self.EMOTION_CACHE)
+            self.sort()
             print(f"Post processing Emotions (Insertion) completed for {notebook_name} {section_name}")
 
         if self.Args.Step == 8:
@@ -255,24 +297,25 @@ class VoiceGenerator:
             nb_cache = self.EMOTION_CACHE.setdefault(notebook_name, {})
             sec_cache = nb_cache.setdefault(section_name, {})
             for page in pages[:limit]:
-                print(f"Generating voice for {notebook_name} {section_name} {page['title']}")
-                content = sec_cache[page['title']]
-                if self.Args.Generator.OpenAI.Action:
-                    openAIConvert(self.Args, content, page["title"])
-                elif self.Args.Generator.Maya.Action:
-                    mayaConvert(self.Args, content, page["title"], outputPath)
+                if self.checkInPageNums(page["title"]):
+                    print(f"Generating voice for {notebook_name} {section_name} {page['title']}")
+                    content = sec_cache[page['title']]
+                    if self.Args.Generator.OpenAI.Action:
+                        openAIConvert(self.Args, content, page["title"])
+                    elif self.Args.Generator.Maya.Action:
+                        mayaConvert(self.Args, content, page["title"], outputPath)
 
-            audios = [file for file in glob.glob(outputPath + "audios/*.npy") if "partial" not in file]
-            audios.sort(key=os.path.getmtime)
-            audiobook = []
-            for audio in audios:
-                audiobook.append(np.load(audio))
-                audiobook.append(audio)
-                np.zeros(int(0.3 * 24000))
-            audiobook = np.concatenate(audiobook)
-            final_audio_path = outputPath + 'audios/audiobook.wav'
-            sf.write(final_audio_path, audiobook, 24000)
-            print(f"Saved audiobook in {final_audio_path} !")
+                audios = [file for file in glob.glob(outputPath + "audios/*.npy") if "partial" not in file]
+                audios.sort(key=os.path.getmtime)
+                audiobook = []
+                for audio in audios:
+                    audiobook.append(np.load(audio))
+                    audiobook.append(audio)
+                    np.zeros(int(0.3 * 24000))
+                audiobook = np.concatenate(audiobook)
+                final_audio_path = outputPath + f'audios/{page["title"]}.wav'
+                sf.write(final_audio_path, audiobook, 24000)
+                print(f"Saved audiobook in {final_audio_path} !")
 
 
 if __name__ == "__main__":

@@ -201,7 +201,7 @@ def emotion_det_post_process(lines, title):
     processed_results = [None] * len(lines)
     with ProcessPoolExecutor() as executor:
         futures = {executor.submit(process_emotions, l): i for i, l in enumerate(lines)}
-        for f in tqdm(as_completed(futures), total=len(futures), desc=f"{title} lines"):
+        for f in tqdm(as_completed(futures), total=len(futures), desc=f"{title}"):
             i = futures[f]
             processed_results[i] = f.result()
 
@@ -352,7 +352,7 @@ def emotion_inst_post_process(lines, title):
     processed_results = [None] * len(lines)
     with ProcessPoolExecutor() as executor:
         futures = {executor.submit(process_insertions, l): i for i, l in enumerate(lines)}
-        for f in tqdm(as_completed(futures), total=len(futures), desc=f"{title} lines"):
+        for f in tqdm(as_completed(futures), total=len(futures), desc=f"{title}"):
             i = futures[f]
             processed_results[i] = f.result()
 

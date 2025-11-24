@@ -1,7 +1,7 @@
 import json
-import os
+import argparse
 import yaml
-
+import time
 from analysis import analysis
 from utils import CustomObject, get_yaml_loader, updateCache, create_or_load_Cache, content_stats
 from GraphAPI.graphs import GraphAPI
@@ -23,6 +23,13 @@ class Initialization:
         self.graph = GraphAPI(self.Args.Graph)
         self.notebook_name = self.Args.Graph.NotebookName
         self.section_name = self.Args.Graph.SectionName
+
+        parser = argparse.ArgumentParser(description="Load Data")
+        parser.add_argument("--refreshPages", type=bool, default=False, help="ContentReload")
+        parser.add_argument("--pageLimit", type=int, default=None, help="ContentReload")
+        args = parser.parse_args()
+        self.Args.Graph.RefreshPages = args.refreshPages
+        self.Args.Graph.PageLimit = args.pageLimit
 
     def run(self):
 
@@ -63,11 +70,10 @@ class Initialization:
         if self.Args.Graph.PageLimit:
             limit = self.Args.Graph.PageLimit
 
+        print("Running Page Content API")
         for page in pages[:limit]:
             update_cache = False
-            if not self.Args.Graph.RefreshPages and page["title"] in self.CONTENT_CACHE:
-                page_content = self.CONTENT_CACHE[page["title"]]
-            else:
+            if self.Args.Graph.RefreshPages or not page["title"] in self.CONTENT_CACHE:
                 page_content = self.graph.getContent(page["id"])
                 self.CONTENT_CACHE[page["title"]] = {
                     "content": page_content,
@@ -75,6 +81,7 @@ class Initialization:
                 }
                 update_cache = True
                 print(f"Downloaded the page {page['title']}")
+                time.sleep(5)
 
             if update_cache: updateCache('contentCache.json', self.CONTENT_CACHE)
 

@@ -87,8 +87,6 @@ class GraphAPI:
 
     def getContent(self, page_id):
         self.setHeaders()
-        print("Running Page Content API")
-
         self.headers["Content-Type"] = "text/html"
         response = requests.get(C.CONTENT_URL.replace("{}", page_id), headers=self.headers)
         if response.status_code != 200:

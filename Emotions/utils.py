@@ -32,7 +32,6 @@ def getDevice():
         device = "cuda"
     elif torch.backends.mps.is_available():
         device = "mps"
-
     return device
 
 
@@ -48,7 +47,6 @@ def getModelAndTokenizer(Args):
     CACHE_PATH = Args.Emotions.CachePath.__dict__[Args.Platform]
 
     quantize, platform = Args.Emotions.Quantize, Args.Platform
-
 
     if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
         DTYPE = torch.bfloat16
@@ -66,14 +64,14 @@ def getModelAndTokenizer(Args):
         )
 
     tokenizer = AutoTokenizer.from_pretrained(
-        MODEL_NAME,
+        MODEL_NAME if platform != 'Kaggle' else MODEL_NAME + 'Tokenizer/',
         cache_dir=CACHE_PATH,
         use_fast=True,
         padding_side="left"
     )
 
     model = AutoModelForCausalLM.from_pretrained(
-        MODEL_NAME,
+        MODEL_NAME if platform != 'Kaggle' else MODEL_NAME + 'Model/',
         cache_dir=CACHE_PATH,
         quantization_config=bnb_config,
         device_map="balanced",
