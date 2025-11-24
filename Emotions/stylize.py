@@ -49,7 +49,6 @@ def build_system_prefix_cache(model, tokenizer):
 def stylize(Args, pages, notebook_name, section_name, VOICE_CACHE):
 
     model, tokenizer = getModelAndTokenizer(Args)
-    terminators = [tokenizer.eos_token_id]
 
     static_ids, static_mask, static_past = build_system_prefix_cache(model, tokenizer)
 
@@ -61,7 +60,7 @@ def stylize(Args, pages, notebook_name, section_name, VOICE_CACHE):
         try:
             chunks = createChunks(content, limit=2000)
             prompts = generate_prompts(chunks)
-            outputs = paragraph_stylization(page["title"], model, prompts, terminators, tokenizer, static_mask, past_batch, BATCH_SIZE)
+            outputs = paragraph_stylization(page["title"], model, prompts, tokenizer, static_mask, past_batch, BATCH_SIZE)
 
             # Save the page generated
             if outputs:
@@ -78,7 +77,7 @@ def stylize(Args, pages, notebook_name, section_name, VOICE_CACHE):
     return processed
 
 
-def paragraph_stylization(title, model, prompts, terminators, tokenizer, static_mask, past_batch, BATCH_SIZE):
+def paragraph_stylization(title, model, prompts, tokenizer, static_mask, past_batch, BATCH_SIZE):
     outputs = []
     device = next(model.parameters()).device
     for i in tqdm(range(0, len(prompts), BATCH_SIZE), desc=f"{title}", ncols=90, position=1):
@@ -115,7 +114,7 @@ def paragraph_stylization(title, model, prompts, terminators, tokenizer, static_
                     attention_mask=full_mask,
                     past_key_values=past_batch_val,
                     max_new_tokens=256,
-                    eos_token_id=terminators,
+                    eos_token_id=tokenizer.eos_token_id,
                 )
 
             gen_only = generated[:, dyn_ids.size(1):]

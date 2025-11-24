@@ -138,7 +138,7 @@ def getSummaries(content, model, tokenizer):
         output = tokenizer.decode(decoded[0], skip_special_tokens=True)
         response = extractSuggestions(output)
     except Exception as e:
-        print(f"Error {e}.")
+        print(f"Model Error {e}.")
     finally:
         generated = None
         decoded = None

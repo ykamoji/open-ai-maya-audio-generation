@@ -186,7 +186,7 @@ class VoiceGenerator:
             setFooter(step_name)
 
         if 2 in self.Args.Steps:
-            step_name = " Voice Post Processing "
+            step_name = " Post Processing "
             setHeader(step_name)
             voice_cache = self.VOICE_CACHE[notebook_name][section_name]
             self.VOICE_CACHE[notebook_name][section_name] = voice_post_process(voice_cache)
@@ -318,13 +318,14 @@ class VoiceGenerator:
             setFooter(step_name)
 
         if 8 in self.Args.Steps:
+            step_name = " Voice Generation "
+            setHeader(step_name)
             outputPath = self.Args.Generator.AudioOutputPath.__dict__[self.Args.Platform]
             nb_cache = self.EMOTION_CACHE.setdefault(notebook_name, {})
             sec_cache = nb_cache.setdefault(section_name, {})
             audio_chapters = [file for file in glob.glob(outputPath + "audios/*.wav") if "partial" not in file]
             for page in pages:
                 if page["title"] not in audio_chapters or self.checkInPageNums(page["title"]):
-                    print(f"\nGenerating voice for {notebook_name} {section_name} {page['title']}.")
                     content = sec_cache[page['title']]
                     if self.Args.Generator.OpenAI.Action:
                         openAIConvert(self.Args, content, page["title"])
@@ -342,6 +343,7 @@ class VoiceGenerator:
             final_audio_path = outputPath + f'audiobook.wav'
             sf.write(final_audio_path, audiobook, 24000)
             print(f"Saved audiobook in {final_audio_path} !")
+            setFooter(step_name)
 
 
 if __name__ == "__main__":

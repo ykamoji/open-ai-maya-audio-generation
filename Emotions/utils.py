@@ -82,6 +82,14 @@ def getModelAndTokenizer(Args):
 
     model.eval()
 
+    if platform == 'Kaggle' or platform == 'Colab':
+        import torch._dynamo.config as dynamo_config
+        import torch._inductor.config as inductor_config
+        dynamo_config.allow_unspec_int_on_nn_module = True
+        inductor_config.max_autotune = True
+        torch.backends.cuda.matmul.allow_tf32 = True
+        model = torch.compile(model, mode="reduce-overhead")
+
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.pad_token_id = tokenizer.eos_token_id
@@ -107,8 +115,8 @@ def repeat_past_kv(past_key_values, batch_size):
 def slice_prefix_kv(prefix_kv_big, batch_size):
     sliced = []
     for k_big, v_big in prefix_kv_big:
-        k_small = k_big[:batch_size]
-        v_small = v_big[:batch_size]
+        k_small = k_big[:batch_size].contiguous()
+        v_small = v_big[:batch_size].contiguous()
         sliced.append((k_small, v_small))
     return tuple(sliced)
 
@@ -133,16 +141,12 @@ def fast_generate(
     """
 
     device = next(model.parameters()).device
-    model.eval()
 
     dynamic_ids = dynamic_ids.to(device)
     attention_mask = attention_mask.to(device)
 
     # Normalize EOS
-    if eos_token_id is None:
-        eos_tensor = None
-    else:
-        eos_tensor = torch.tensor([eos_token_id], device=device)
+    eos_tensor = torch.tensor([eos_token_id], device=device)
 
     batch_size = dynamic_ids.size(0)
 
@@ -159,11 +163,7 @@ def fast_generate(
     # We'll decode only from the dynamic part onward
     generated = dynamic_ids.clone()
 
-    # Track finished if EOS is defined
-    if eos_tensor is not None:
-        finished = torch.zeros(batch_size, dtype=torch.bool, device=device)
-    else:
-        finished = None
+    finished = torch.zeros(batch_size, dtype=torch.bool, device=device)
 
     cur_attention_mask = attention_mask
 
@@ -174,12 +174,7 @@ def fast_generate(
             is_eos = (next_tok == eos_tensor[0])
             finished |= is_eos
 
-            generated = torch.cat([generated, next_tok.unsqueeze(-1)], dim=-1)
-
-            if finished.all():
-                break
-        else:
-            generated = torch.cat([generated, next_tok.unsqueeze(-1)], dim=-1)
+        generated = torch.cat([generated, next_tok.unsqueeze(-1)], dim=-1)
 
         # extend attention mask (prefix_len + dynamic_len + t)
         cur_attention_mask = torch.cat(
@@ -206,12 +201,10 @@ def fast_generate_sampling(
         attention_mask: torch.Tensor,
         past_key_values=None,
         max_new_tokens: int = 128,
-        eos_token_id=None,
         temperature: float = 1.0,
         top_k: int = 0,
         top_p: float = 1.0,
-        repetition_penalty: float = 1.0,
-        min_new_tokens: int = 0,
+        repetition_penalty: float = 1.0
 ):
     """
     Trimmed KV-cached HF-compatible sampler.
@@ -228,14 +221,9 @@ def fast_generate_sampling(
     """
 
     device = next(model.parameters()).device
-    model.eval()
 
     dynamic_ids = dynamic_ids.to(device)
     attention_mask = attention_mask.to(device)
-
-    eos_tensor = None
-    if eos_token_id is not None:
-        eos_tensor = torch.tensor([eos_token_id], device=device)
 
     batch_size = dynamic_ids.size(0)
 
@@ -252,12 +240,6 @@ def fast_generate_sampling(
 
     generated = dynamic_ids.clone()
 
-    # Track finished sequences
-    if eos_tensor is not None:
-        finished = torch.zeros(batch_size, dtype=torch.bool, device=device)
-    else:
-        finished = None
-
     cur_mask = attention_mask
 
     # -----------------------------
@@ -265,86 +247,58 @@ def fast_generate_sampling(
     # -----------------------------
     for step in range(max_new_tokens):
 
-        # ----- 1. Temperature scaling -----
-        if temperature != 1.0:
-            logits = logits / temperature
+        # ----- Repetition penalty -----
+        before = logits.clone()
+        for b in range(batch_size):
+            seen_tokens = generated[b].unique()
+            vals = logits[b, seen_tokens]
+            logits[b, seen_tokens] = torch.where(vals < 0, vals * repetition_penalty, vals / repetition_penalty)
 
-        # ----- 2. Repetition penalty -----
-        if repetition_penalty != 1.0:
-            before = logits.clone()
-            for b in range(batch_size):
-                seen = set(generated[b].tolist())
-                for t in seen:
-                    val = logits[b, t]
-                    logits[b, t] = val / repetition_penalty if val > 0 else val * repetition_penalty
+        # per-filter fallback
+        if torch.isnan(logits).any() or torch.isinf(logits).all():
+            logits = before
 
-            # per-filter fallback
-            if torch.isnan(logits).any() or torch.isinf(logits).all():
-                logits = before
+        # ----- Temperature scaling -----
+        logits = logits / temperature
 
-        # ----- 3. Top-k -----
-        if top_k > 0:
-            before = logits.clone()
-            kth_vals = torch.topk(logits, top_k, dim=-1).values[:, -1].unsqueeze(-1)
-            logits = torch.where(
-                logits < kth_vals,
-                torch.full_like(logits, -float('inf')),
-                logits
-            )
-            # per-filter fallback
-            if torch.isinf(logits).all() or torch.isnan(logits).any():
-                logits = before
+        # ----- Top-k -----
+        before = logits.clone()
+        kth_vals = torch.topk(logits, top_k, dim=-1).values[:, -1].unsqueeze(-1)
+        logits = torch.where(
+            logits < kth_vals,
+            torch.full_like(logits, -float('inf')),
+            logits
+        )
+        # per-filter fallback
+        if torch.isinf(logits).all() or torch.isnan(logits).any():
+            logits = before
 
-        # ----- 4. Top-p (nucleus) -----
-        if top_p < 1.0:
-            before = logits.clone()
+        # ----- Top-p (nucleus) -----
+        before = logits.clone()
 
-            sorted_logits, sorted_idx = torch.sort(logits, descending=True, dim=-1)
-            sorted_probs = F.softmax(sorted_logits, dim=-1)
-            cumulative_probs = sorted_probs.cumsum(dim=-1)
+        sorted_logits, sorted_idx = torch.sort(logits, descending=True, dim=-1)
+        cumulative_probs = F.softmax(sorted_logits, dim=-1).cumsum(dim=-1)
 
-            mask = cumulative_probs > top_p
-            mask[:, 1:] = mask[:, :-1].clone()
+        mask = cumulative_probs > top_p
+        mask[:, 1:] = mask[:, :-1].clone()
 
-            sorted_logits = torch.where(mask, torch.full_like(sorted_logits, -float('inf')), sorted_logits)
+        sorted_logits = torch.where(mask, torch.full_like(sorted_logits, -float('inf')), sorted_logits)
 
-            # Unsort
-            original = torch.empty_like(sorted_logits)
-            original.scatter_(1, sorted_idx, sorted_logits)
-            logits = original
+        # Unsort
+        original = torch.empty_like(sorted_logits)
+        original.scatter_(1, sorted_idx, sorted_logits)
+        logits = original
 
-            # per-filter fallback
-            if torch.isinf(logits).all() or torch.isnan(logits).any():
-                logits = before
+        # per-filter fallback
+        if torch.isinf(logits).all() or torch.isnan(logits).any():
+            logits = before
 
         # ----- 5. Sample next token -----
         probs = F.softmax(logits, dim=-1)
         next_tok = torch.multinomial(probs, 1).squeeze(-1)
 
-        # ----- 6. Handle EOS -----
-        if eos_tensor is not None:
-            eos_reached = (next_tok == eos_tensor[0])
-
-            # Suppress EOS until min_new_tokens reached
-            if step < min_new_tokens:
-                # replace EOS with highest non-EOS token
-                for b in range(batch_size):
-                    if eos_reached[b]:
-                        # pick second-best token that is not EOS
-                        _, top2 = torch.topk(logits[b], 2)
-                        replacement = top2[1] if top2[0] == eos_tensor[0] else top2[0]
-                        next_tok[b] = replacement
-
-            else:
-                # after min_new_tokens, allow EOS
-                finished |= eos_reached
-
         # Append sampled token
         generated = torch.cat([generated, next_tok.unsqueeze(-1)], dim=-1)
-
-        # Stop if all sequences finished
-        if finished is not None and finished.all():
-            break
 
         # ----- 7. Update attention mask -----
         cur_mask = torch.cat(
