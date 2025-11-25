@@ -80,15 +80,7 @@ def getModelAndTokenizer(Args):
         load_in_8bit=False
     )
 
-    model.eval()
-
-    if platform == 'Kaggle' or platform == 'Colab':
-        import torch._dynamo.config as dynamo_config
-        import torch._inductor.config as inductor_config
-        dynamo_config.allow_unspec_int_on_nn_module = True
-        inductor_config.max_autotune = True
-        torch.backends.cuda.matmul.allow_tf32 = True
-        model = torch.compile(model, mode="reduce-overhead")
+    model = model.eval()
 
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token

@@ -30,14 +30,18 @@ Generator:
     ChunkLimit: 1000
   Maya:
     Action: True
-    ModelPath:
+    ModelName:
+      Default: maya-research/maya1
+      Kaggle: /kaggle/input/maya/transformers/1/2/
+      Colab: maya-research/maya1
+    CachePath:
       Default: /Users/ykamoji/Documents/open-ai-maya-audio-generation/models/
-      Kaggle: # For Kaggle, use internal cache
+      Kaggle: /kaggle/working/output/
       Colab: /content/drive/MyDrive/AI/Models/
     Characters:
       - Name: David
-        Description: "Seductively character, Male voice in their 30s with American accent. Low pitch, gravelly timbre, slow pacing, casual tone at mid intensity"
+        Description: "Creative, seductively character. Male voice in their 30s with american accent. Low pitch, gravelly timbre, slow pacing, casual tone at high intensity."
       - Name: Vanessa
-        Description: "Seductively character, Female voice in their 30s with American accent. Low pitch, gravelly timbre, slow pacing, casual tone at mid intensity"
+        Description: "Creative, seductively character. Female voice in their 30s with american accent. Low pitch, gravelly timbre, slow pacing, casual tone at low intensity."
       - Name: Blake
-        Description: "Realistic dramatic narrator character, Male voice in their 30s with a American accent. Low pitch, gravelly timbre, slow pacing, casual tone at mid intensity"
+        Description: "Creative, dramatic_narrator character. Male voice in their 30s with american accent. Low pitch, gravelly timbre, slow pacing, casual tone at mid intensity."
