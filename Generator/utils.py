@@ -22,7 +22,7 @@ def convert_to_sentences(content):
     return [se for se in re.split(pattern, content) if se.strip()]
 
 
-def batch_sentences(lines, limit=14):
+def batch_sentences(lines, limit=300):
     result = [lines[0], ""]
     current = ""
     for line in lines[1:]:
@@ -33,7 +33,7 @@ def batch_sentences(lines, limit=14):
             result.append("")
             continue
 
-        if len(current.split()) + len(line.split()) > limit:
+        if len(current) + len(line) + (1 if current else 0) > limit:
             if current:
                 result.append(current.strip())
             current = line

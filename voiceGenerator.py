@@ -91,7 +91,7 @@ class VoiceGenerator:
         elif "suggestion" in titles:
             title = random.choice(titles["suggestion"])
 
-        return f"Chapter {number}," + (f" {title}" if title else "")
+        return f"Chapter {number}." + (f" {title}" if title else "")
 
     def check_detection_emotion_post_process(self, title):
         lines = self.EMOTION_CACHE[self.Args.Graph.NotebookName][self.Args.Graph.SectionName][title]
