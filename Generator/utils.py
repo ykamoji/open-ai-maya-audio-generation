@@ -3,21 +3,37 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from snac import SNAC
 import re
 
+from Emotions.utils import getDevice
+
 pattern = r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<![A-Z]\.)(?<=\.)\s'
 
 
 def getModels(MODEL_NAME, CACHE_PATH, platform):
+    model = getARModel(CACHE_PATH, MODEL_NAME, platform)
+    tokenizer = getTokenizer(MODEL_NAME, CACHE_PATH, platform)
+    snac_model = getSnacModel(CACHE_PATH)
+    print("Models loaded")
+    return model, snac_model, tokenizer
+
+
+def getARModel(CACHE_PATH, MODEL_NAME, platform):
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_NAME if platform != "Kaggle" else MODEL_NAME + 'Model/',
         cache_dir=CACHE_PATH,
         torch_dtype=torch.float16,
         trust_remote_code=True
     )
+    model.generation_config.cache_implementation = "static"
+    model.config.use_cache = True
     model.eval()
-    tokenizer = getTokenizer(MODEL_NAME, CACHE_PATH, platform)
-    snac_model = SNAC.from_pretrained("hubertsiuzdak/snac_24khz",  cache_dir=CACHE_PATH).eval()
-    print("Models loaded")
-    return model, snac_model, tokenizer
+    return model
+
+
+def getSnacModel(CACHE_PATH):
+    snac_model = SNAC.from_pretrained("hubertsiuzdak/snac_24khz",
+                                      cache_dir=CACHE_PATH).eval()
+    snac_model = snac_model.to(getDevice())
+    return snac_model
 
 
 def getTokenizer(MODEL_NAME, CACHE_PATH, platform):

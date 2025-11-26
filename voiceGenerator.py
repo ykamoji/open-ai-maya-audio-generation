@@ -12,7 +12,7 @@ from Emotions.emotionPlacement import insertEmotions
 from Emotions.postProcess import voice_post_process, emotion_det_post_process, emotion_inst_post_process
 from Emotions.sumerization import summarization
 from Emotions.utils import getModelAndTokenizer
-from Generator.utils import getModels
+from Generator.utils import getModels, getTokenizer, getSnacModel, getARModel
 from utils import create_or_load_Cache, create_backup, getChapterNo
 from Emotions.stylize import stylize
 from Emotions.emotionDetection import detectEmotions
@@ -326,7 +326,12 @@ class VoiceGenerator:
             MayaArgs = self.Args.Generator.Maya
             MODEL_NAME = MayaArgs.ModelName.__dict__[platform]
             CACHE_PATH = MayaArgs.CachePath.__dict__[platform]
-            voice_model, snac_model, voice_tokenizer = getModels(MODEL_NAME, CACHE_PATH, platform)
+
+            snac_model = getSnacModel(CACHE_PATH)
+            voice_tokenizer = getTokenizer(MODEL_NAME, CACHE_PATH, platform)
+            voice_model = None
+            if platform != 'Kaggle':
+                voice_model = getARModel(MODEL_NAME, CACHE_PATH, platform)
 
             outputPath = self.Args.Generator.AudioOutputPath.__dict__[platform]
             nb_cache = self.EMOTION_CACHE.setdefault(notebook_name, {})
