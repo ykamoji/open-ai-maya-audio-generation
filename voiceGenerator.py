@@ -340,17 +340,7 @@ class VoiceGenerator:
                     elif self.Args.Generator.Maya.Action:
                         mayaConvert(voice_model, snac_model, voice_tokenizer, MayaArgs, content, page["title"], outputPath)
 
-            audios = [file for file in glob.glob(outputPath + "audios/*.npy") if "partial" not in file]
-            audios.sort(key=os.path.getmtime)
-            audiobook = []
-            for audio in audios:
-                audiobook.append(np.load(audio))
-                audiobook.append(audio)
-                np.zeros(int(0.3 * 24000))
-            audiobook = np.concatenate(audiobook)
-            final_audio_path = outputPath + f'audiobook.wav'
-            sf.write(final_audio_path, audiobook, 24000)
-            print(f"Saved audiobook in {final_audio_path} !")
+            print(f"Saved npy files in {outputPath} !")
             setFooter(step_name)
 
 

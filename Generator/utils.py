@@ -49,25 +49,28 @@ def convert_to_sentences(content):
 
 
 def batch_sentences(lines, limit=14):
-    result = [lines[0], ""]
+    paraBreak = "  "
+    result = [lines[0]+paraBreak]
     current = ""
+    lineBreak = " "
     for line in lines[1:]:
         if line.strip() == "":
             if current:
-                result.append(current.strip())
+                result.append(f"{current.strip()}{paraBreak}")
                 current = ""
-            result.append("")
+            else:
+                result[-1] += paraBreak
             continue
 
         if len(current.split()) + len(line.split()) > limit:
             if current:
-                result.append(current.strip())
+                result.append(current.strip() + lineBreak)
             current = line
         else:
-            current = (current + " " + line).strip() if current else line
+            current = (current + lineBreak + line).strip() if current else line
 
     if current:
-        result.append(current.strip())
+        result.append(current.strip() + " ")
 
     return result
 

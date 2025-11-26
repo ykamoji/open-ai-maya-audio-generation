@@ -6,12 +6,11 @@ import warnings
 import numpy as np
 import threading
 import queue
-import soundfile as sf
 import gc
-from pathlib import Path
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 from Emotions.utils import getDevice, clear_cache
+from Generator.decoder import create_audio
 from Generator.utils import batch_sentences
 
 warnings.filterwarnings("ignore")
@@ -29,7 +28,7 @@ SOA_ID = 128261
 BOS_ID = 128000
 TEXT_EOT_ID = 128009
 
-LOG_STEPS = 20
+LOG_STEPS = 4
 
 
 def build_prompt(tokenizer, description: str, text: str) -> str:
@@ -51,82 +50,10 @@ def build_prompt(tokenizer, description: str, text: str) -> str:
     return prompt
 
 
-def extract_snac_codes(token_ids: list) -> list:
-    """Extract SNAC codes from generated tokens."""
-    try:
-        eos_idx = token_ids.index(CODE_END_TOKEN_ID)
-    except ValueError:
-        eos_idx = len(token_ids)
-
-    snac_codes = [
-        token_id for token_id in token_ids[:eos_idx]
-        if SNAC_MIN_ID <= token_id <= SNAC_MAX_ID
-    ]
-
-    return snac_codes
-
-
-def unpack_snac_from_7(snac_tokens: list) -> list:
-    """Unpack 7-token SNAC frames to 3 hierarchical levels."""
-    if snac_tokens and snac_tokens[-1] == CODE_END_TOKEN_ID:
-        snac_tokens = snac_tokens[:-1]
-
-    frames = len(snac_tokens) // SNAC_TOKENS_PER_FRAME
-    snac_tokens = snac_tokens[:frames * SNAC_TOKENS_PER_FRAME]
-
-    if frames == 0:
-        return [[], [], []]
-
-    l1, l2, l3 = [], [], []
-
-    for i in range(frames):
-        slots = snac_tokens[i * 7:(i + 1) * 7]
-        l1.append((slots[0] - CODE_TOKEN_OFFSET) % 4096)
-        l2.extend([
-            (slots[1] - CODE_TOKEN_OFFSET) % 4096,
-            (slots[4] - CODE_TOKEN_OFFSET) % 4096,
-        ])
-        l3.extend([
-            (slots[2] - CODE_TOKEN_OFFSET) % 4096,
-            (slots[3] - CODE_TOKEN_OFFSET) % 4096,
-            (slots[5] - CODE_TOKEN_OFFSET) % 4096,
-            (slots[6] - CODE_TOKEN_OFFSET) % 4096,
-        ])
-
-    return [l1, l2, l3]
-
-
 def estimate_audio_duration(generated_ids):
     snac_count = len([SNAC_MIN_ID <= t <= SNAC_MAX_ID for t in generated_ids])
     duration_sec = snac_count * 0.01194 + 0.07499
     return duration_sec
-
-
-def crossfade(a, b, fade_ms=20, sr=24000):
-    if fade_ms <= 0:
-        return np.concatenate([a, b])
-    fade_samples = int(sr * (fade_ms / 1000.0))
-    if len(a) < fade_samples or len(b) < fade_samples:
-        return np.concatenate([a, b])
-    fade_out = np.linspace(1.0, 0.0, fade_samples, dtype=np.float32)
-    fade_in = np.linspace(0.0, 1.0, fade_samples, dtype=np.float32)
-    a_tail = a[-fade_samples:] * fade_out
-    b_head = b[:fade_samples] * fade_in
-    mid = a_tail + b_head
-    return np.concatenate([a[:-fade_samples], mid, b[fade_samples:]])
-
-
-def stitch_audio_list(audio_list, silence_ms=30, crossfade_ms=20):
-    if not audio_list:
-        return np.zeros(1, dtype=np.float32)
-    out = audio_list[0]
-    for next_audio in audio_list[1:]:
-        if crossfade_ms > 0:
-            out = crossfade(out, next_audio, fade_ms=crossfade_ms)
-        else:
-            silence = np.zeros(int(24000 * (silence_ms / 1000.0)), dtype=np.float32)
-            out = np.concatenate([out, silence, next_audio])
-    return out
 
 
 def getDescription(MayaArgs, title):
@@ -136,9 +63,6 @@ def getDescription(MayaArgs, title):
             description = character.Description
     print(f"Description: {description}")
     return description
-
-
-
 
 
 def delete_previous_outputs(outputPath, step):
@@ -155,8 +79,6 @@ def delete_previous_outputs(outputPath, step):
 
 def convert(model, snac_model, tokenizer, MayaArgs, content, title, outputPath):
 
-    description = getDescription(MayaArgs, title)
-
     GPUCount = 0
     if torch.cuda.is_available():
         GPUCount = torch.cuda.device_count()
@@ -165,9 +87,10 @@ def convert(model, snac_model, tokenizer, MayaArgs, content, title, outputPath):
 
     torch.manual_seed(0)
 
+    description = getDescription(MayaArgs, title)
+
     prompt_inputs = [
         tokenizer(build_prompt(tokenizer, description, chunk), return_tensors="pt")
-        if chunk.strip() else ""
         for chunk in chunks
     ]
 
@@ -176,10 +99,10 @@ def convert(model, snac_model, tokenizer, MayaArgs, content, title, outputPath):
         # multiGPU(chunks, description, outputPath, title, MODEL_PATH)
     else:
         print("Running in CPU or single GPU env.")
-        singleProcess(prompt_inputs, description, model, outputPath, snac_model, title, tokenizer)
+        singleProcess(prompt_inputs, model, outputPath, snac_model, title, tokenizer)
 
 
-def processVoice(model, tokenizer, snac_model, inputs, description, part):
+def processVoice(model, tokenizer, inputs, part):
     start_time = time.time()
     with torch.inference_mode():
         outputs = model.generate(
@@ -214,64 +137,7 @@ def processVoice(model, tokenizer, snac_model, inputs, description, part):
     return generated_ids, generation_time, audio_duration, rtf
 
 
-def decode_audio(generated_outputs, snac_model):
-    audio_chunks = []
-    for generated_ids in generated_outputs:
-
-        if type(generated_ids) == str:
-            audio_chunks.append(np.zeros(int(0.2 * 24000)))
-            continue
-
-        # Extract SNAC audio tokens
-        snac_tokens = extract_snac_codes(generated_ids)
-
-        if len(snac_tokens) < 7:
-            print(f" Not enough SNAC tokens generated")
-            # return
-
-        levels = unpack_snac_from_7(snac_tokens)
-
-        codes_tensor = [
-            torch.tensor(level, dtype=torch.long, device=getDevice()).unsqueeze(0)
-            for level in levels
-        ]
-
-        with torch.inference_mode():
-            z_q = snac_model.quantizer.from_codes(codes_tensor)
-            audio_chunks.append(snac_model.decoder(z_q)[0, 0].cpu().numpy())
-
-    return audio_chunks
-
-
-def saveAudio(outputPath, audio_chunks, title):
-    # silence_first = np.zeros(int(0.3 * 24000), dtype=np.float32)
-    # silence_normal = np.zeros(int(0.15 * 24000), dtype=np.float32)
-    # full = []
-    # for i, chunk in enumerate(audio_chunks):
-    #     if chunk is None or len(chunk) == 0:
-    #         continue
-    #     full.append(chunk)
-    #     if i < len(audio_chunks) - 1:
-    #         if i == 0:
-    #             full.append(silence_first)
-    #         else:
-    #             full.append(silence_normal)
-    #
-    # if not full:
-    #     full_audio = np.zeros(1, dtype=np.float32)
-    # else:
-    #     full_audio = np.concatenate(full)
-    if len(audio_chunks) == 1:
-        full_audio = audio_chunks[0]
-    else:
-        full_audio = np.concatenate([audio_chunks[0], np.zeros(int(0.3 * 24000)), stitch_audio_list(audio_chunks[1:])])
-    file = os.path.join(outputPath, f"{title}.npy")
-    Path(outputPath).mkdir(parents=True, exist_ok=True)
-    # np.save(file, full_audio)
-    sf.write(outputPath + f'{title}.wav', full_audio, samplerate=24000)
-
-
-def singleProcess(prompt_inputs, description, model, outputPath, snac_model, title, tokenizer):
+def singleProcess(prompt_inputs, model, outputPath, snac_model, title, tokenizer):
     input_lengths = []
     generation_times = []
     writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
@@ -282,17 +148,10 @@ def singleProcess(prompt_inputs, description, model, outputPath, snac_model, tit
     generated_outputs = []
     for part, inputs in enumerate(tqdm(prompt_inputs, desc="Generating audio")):
         # print(chunk)
-        if type(inputs) == str:
-            # Adding a pause between paras to keep the conversation seperate
-            # audio_chunks.append(np.zeros(int(0.2 * 24000)))
-            generated_outputs.append("")
-            # print(f"Voice generation for part {step} (para break)")
-            continue
         # print(f"Voice generation for part {step}/{total} ...")
-        # start_time = time.time()
-        generated_ids, generation_time, audio_duration, rtf = processVoice(model, tokenizer, snac_model, inputs, description, part)
+        generated_ids, generation_time, audio_duration, rtf = processVoice(model, tokenizer, inputs, part)
         generated_outputs.append(generated_ids)
-        print(f"Voice generation for part {step} ({audio_duration:.2f} sec) in {generation_time:.2f} sec")
+        # print(f"Voice generation for part {step} ({audio_duration:.2f} sec) in {generation_time:.2f} sec")
         input_length = len(inputs['input_ids'][0])
         input_lengths.append(input_length)
         generation_times.append(generation_time)
@@ -308,15 +167,14 @@ def singleProcess(prompt_inputs, description, model, outputPath, snac_model, tit
                 writer.add_scalar("Performance/InputDurationCorr", correlation, step)
 
             delete_previous_outputs(audio_path, step)
-            saveAudio(audio_path, decode_audio(generated_outputs, snac_model), f"total_partial_{step}")
+            create_audio(generated_outputs, snac_model, audio_path, f"partial_{step}")
 
         step += 1
     writer.close()
 
-    audio_chunks = decode_audio(generated_outputs, snac_model)
+    create_audio(generated_outputs, snac_model, audio_path, title)
 
-    clear_cache()
-    saveAudio(audio_path, audio_chunks, title)
+
 
 # def multiGPU(chunks, description, outputPath, title, MODEL_PATH):
 #     writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
