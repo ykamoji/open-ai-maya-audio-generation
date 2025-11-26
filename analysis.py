@@ -13,7 +13,7 @@ def analysis():
         for metric in metrics:
             stats[param][metric] = 0
 
-    with open('contentCache.json') as f:
+    with open('cache/contentCache.json') as f:
         pages = json.load(f)
 
     mx, mn = {}, {}
@@ -60,7 +60,7 @@ def analysis():
 
 
 def post_processing_helper():
-    with open('voiceCache.json') as f:
+    with open('cache/voiceCache.json') as f:
         content = json.load(f)
 
     count = 0

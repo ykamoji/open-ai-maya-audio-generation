@@ -1,8 +1,7 @@
 import torch
-import re
 import inspect
 from tqdm import tqdm
-from Emotions.utils import getModelAndTokenizer, clear_cache, getDevice, fast_generate, slice_prefix_kv, repeat_past_kv
+from Emotions.utils import getModelAndTokenizer, clear_cache, fast_generate, slice_prefix_kv, repeat_past_kv
 from utils import updateCache
 
 
@@ -15,19 +14,22 @@ PLACEMENT_PREFIX = inspect.cleandoc(f"""
         RULES:
         1. If the emotional cue is direct or indirect
            (examples: wide-eyed, shocked, tense, uneasy, startled, frozen, nervous, hesitant, trembling),
-           place the tag at the strongest emotional point of the sentence.
+        3. Place the tag at the strongest emotional point of the sentence.
+           - If multiple cues exist, choose the most intense one.
+           - If intensity is unclear, choose the earliest cue.
         2. You may position the tag either BEFORE or AFTER the emotional cue word. 
-           Choose whichever placement gives the clearest expressive delivery.
+           - Default to BEFORE unless AFTER clearly improves delivery (e.g., after a comma or natural pause).
         3. If the emotional moment resolves at the end of the sentence, return {{ "position": "END" }}.
-        4. Return ONLY {{ "position": index }} or {{ "position": "END" }}.
-        5. Do NOT output anything else.
+        4. If unsure or the sentence has no emotional cue → {{ "position": "" }}.
+        5. Words are indexed using whitespace tokenization.
+           Punctuation attached to a word (comma, period, quotes) counts as part of that word.
         6. Do NOT rewrite the sentence.
-        7. Do NOT output explanations.
+        7. Do NOT output explanations or anything else.
         
         OUTPUT FORMAT (STRICT):
-            - If a single integer index (0-based) → {{ "position": index }}
+            - If a single integer index (0-based) → {{ "position": "index" }}
             - If END → {{ "position": "END" }}
-            - If unsure or the sentence has no emotional cue → {{ "position": "END" }}
+            - If unsure or the sentence has no emotional cue → {{ "position": "" }}
 
         EXAMPLE 1:
         TAG: EXCITED
@@ -124,7 +126,7 @@ def insert_emotion_index(title, sentences, tags, model, tokenizer, BATCH_SIZE=20
                     dynamic_ids=dyn_ids,
                     attention_mask=full_mask,
                     past_key_values=past_batch_val,
-                    max_new_tokens=20,
+                    max_new_tokens=10,
                     eos_token_id=tokenizer.eos_token_id,
                 )
 
@@ -153,9 +155,7 @@ def insert_emotion_index(title, sentences, tags, model, tokenizer, BATCH_SIZE=20
     return placement_indexes
 
 
-def insertEmotions(Args, pages, notebook_name, section_name, EMOTION_CACHE):
-
-    model, tokenizer = getModelAndTokenizer(Args)
+def insertEmotions(model, tokenizer, pages, notebook_name, section_name, EMOTION_CACHE):
 
     progress = 0
     for page in tqdm(pages, desc="Pages", ncols=100, position=0):
@@ -185,7 +185,7 @@ def insertEmotions(Args, pages, notebook_name, section_name, EMOTION_CACHE):
                     print(f"No placements for the emotions. Skipping {page['lines']}")
 
             EMOTION_CACHE[notebook_name][section_name][page['title']] = lines
-            updateCache('emotionCache.json', EMOTION_CACHE)
+            updateCache('cache/emotionCache.json', EMOTION_CACHE)
             progress += 1
         except Exception as e:
             print(f"Exception: {e}. Skipping {page['title']}.")

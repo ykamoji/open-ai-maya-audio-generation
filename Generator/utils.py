@@ -1,6 +1,32 @@
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from snac import SNAC
 import re
 
 pattern = r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<![A-Z]\.)(?<=\.)\s'
+
+
+def getModels(MODEL_NAME, CACHE_PATH, platform):
+    model = AutoModelForCausalLM.from_pretrained(
+        MODEL_NAME if platform != "Kaggle" else MODEL_NAME + 'Model/',
+        cache_dir=CACHE_PATH,
+        torch_dtype=torch.float16,
+        trust_remote_code=True
+    )
+    model.eval()
+    tokenizer = getTokenizer(MODEL_NAME, CACHE_PATH, platform)
+    snac_model = SNAC.from_pretrained("hubertsiuzdak/snac_24khz",  cache_dir=CACHE_PATH).eval()
+    print("Models loaded")
+    return model, snac_model, tokenizer
+
+
+def getTokenizer(MODEL_NAME, CACHE_PATH, platform):
+    tokenizer = AutoTokenizer.from_pretrained(
+        MODEL_NAME if platform != "Kaggle" else MODEL_NAME + 'Tokenizer/',
+        cache_dir=CACHE_PATH,
+        trust_remote_code=True
+    )
+    return tokenizer
 
 
 def createChunks(content, limit=None):

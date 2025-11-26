@@ -46,9 +46,7 @@ def build_system_prefix_cache(model, tokenizer):
     return static_ids, static_mask, static_past
 
 
-def stylize(Args, pages, notebook_name, section_name, VOICE_CACHE):
-
-    model, tokenizer = getModelAndTokenizer(Args)
+def stylize(model, tokenizer, pages, notebook_name, section_name, VOICE_CACHE):
 
     static_ids, static_mask, static_past = build_system_prefix_cache(model, tokenizer)
 
@@ -65,7 +63,7 @@ def stylize(Args, pages, notebook_name, section_name, VOICE_CACHE):
             # Save the page generated
             if outputs:
                 VOICE_CACHE[notebook_name][section_name][page["title"]] = outputs
-                updateCache('voiceCache.json', VOICE_CACHE)
+                updateCache('cache/voiceCache.json', VOICE_CACHE)
                 processed += 1
             else:
                 print(f"Stylization skipped for page {page['title']}.")

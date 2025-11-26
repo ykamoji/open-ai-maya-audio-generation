@@ -159,9 +159,7 @@ def extractSuggestions(output):
     return titles
 
 
-def summarization(Args, pages, notebook_name, section_name, TITLE_CACHE):
-
-    model, tokenizer = getModelAndTokenizer(Args)
+def summarization(model, tokenizer, pages, notebook_name, section_name, TITLE_CACHE):
 
     global PREFIX_KV_CACHE, PREFIX_ATTN
     enc = tokenizer(PROMPT_PREFIX, return_tensors="pt").to(getDevice())
@@ -191,7 +189,7 @@ def summarization(Args, pages, notebook_name, section_name, TITLE_CACHE):
                 content["suggestions"] = list(content["suggestions"])
                 content["suggestions"].sort()
                 TITLE_CACHE[notebook_name][section_name][page["title"]] = content
-                updateCache('titleCache.json', TITLE_CACHE)
+                updateCache('cache/titleCache.json', TITLE_CACHE)
                 processed += 1
             else:
                 print(f"No summary found for page {page['title']}")

@@ -21,10 +21,6 @@ Generator:
     Default: output/
     Kaggle: /kaggle/working/output/
     Colab: /content/drive/MyDrive/AI/Outputs/
-  GPU:
-    Default: 0
-    Kaggle: 2
-    Colab: 1
   OpenAI:
     Action: False
     ChunkLimit: 1000

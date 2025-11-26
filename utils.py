@@ -76,7 +76,7 @@ def getChapterNo(title):
 
 
 def create_backup(step, cache):
-    updateCache(f'backups/{step}.json', cache)
+    updateCache(f'cache/backups/{step}.json', cache)
 
 
 def updateCache(file, data):

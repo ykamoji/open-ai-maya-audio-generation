@@ -11,8 +11,8 @@ class Initialization:
 
     def __init__(self):
 
-        self.CACHE = create_or_load_Cache('cache.json')
-        self.CONTENT_CACHE = create_or_load_Cache('contentCache.json')
+        self.CACHE = create_or_load_Cache('cache/cache.json')
+        self.CONTENT_CACHE = create_or_load_Cache('cache/contentCache.json')
 
         with open('default.yaml', 'r') as file:
             config = yaml.load(file, get_yaml_loader())
@@ -62,7 +62,7 @@ class Initialization:
             self.CACHE["Pages"] = {self.section_name: pages}
             update_cache = True
 
-        if update_cache: updateCache('cache.json', self.CACHE)
+        if update_cache: updateCache('cache/cache.json', self.CACHE)
 
         print(f"Found {len(pages)} pages for section {self.section_name} in notebook {self.notebook_name}")
 
@@ -83,7 +83,7 @@ class Initialization:
                 print(f"Downloaded the page {page['title']}")
                 time.sleep(5)
 
-            if update_cache: updateCache('contentCache.json', self.CONTENT_CACHE)
+            if update_cache: updateCache('cache/contentCache.json', self.CONTENT_CACHE)
 
         print("Completed Initialization")
         analysis()

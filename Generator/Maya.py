@@ -9,12 +9,10 @@ import queue
 import soundfile as sf
 import gc
 from pathlib import Path
-from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 from Emotions.utils import getDevice, clear_cache
 from Generator.utils import batch_sentences
-from snac import SNAC
 
 warnings.filterwarnings("ignore")
 
@@ -140,27 +138,7 @@ def getDescription(MayaArgs, title):
     return description
 
 
-def getModels(MODEL_NAME, CACHE_PATH):
-    model = AutoModelForCausalLM.from_pretrained(
-        MODEL_NAME if platform != "Kaggle" else MODEL_NAME + 'Model/',
-        cache_dir=CACHE_PATH,
-        torch_dtype=torch.float16,
-        trust_remote_code=True
-    )
-    model.eval()
-    tokenizer = getTokenizer(MODEL_NAME, CACHE_PATH)
-    snac_model = SNAC.from_pretrained("hubertsiuzdak/snac_24khz",  cache_dir=CACHE_PATH).eval()
-    print("Models loaded")
-    return model, snac_model, tokenizer
 
-
-def getTokenizer(MODEL_NAME, CACHE_PATH):
-    tokenizer = AutoTokenizer.from_pretrained(
-        MODEL_NAME if platform != "Kaggle" else MODEL_NAME + 'Tokenizer/',
-        cache_dir=CACHE_PATH,
-        trust_remote_code=True
-    )
-    return tokenizer
 
 
 def delete_previous_outputs(outputPath, step):
@@ -175,24 +153,17 @@ def delete_previous_outputs(outputPath, step):
                 pass
 
 
-def convert(Args, content, title, outputPath):
-    MayaArgs = Args.Generator.Maya
-
-    global platform
-    platform = Args.Platform
-
-    MODEL_NAME = MayaArgs.ModelName.__dict__[Args.Platform]
-    CACHE_PATH = MayaArgs.CachePath.__dict__[Args.Platform]
+def convert(model, snac_model, tokenizer, MayaArgs, content, title, outputPath):
 
     description = getDescription(MayaArgs, title)
 
-    GPUCount = Args.Generator.GPU.__dict__[Args.Platform]
+    GPUCount = 0
+    if torch.cuda.is_available():
+        GPUCount = torch.cuda.device_count()
 
     chunks = batch_sentences(content)
 
     torch.manual_seed(0)
-
-    model, snac_model, tokenizer = getModels(MODEL_NAME, CACHE_PATH)
 
     prompt_inputs = [
         tokenizer(build_prompt(tokenizer, description, chunk), return_tensors="pt")
@@ -200,12 +171,12 @@ def convert(Args, content, title, outputPath):
         for chunk in chunks
     ]
 
-    if GPUCount > 0:
-        print("Running in GPU env.")
+    if GPUCount > 1:
+        print("Running in multi GPU env.")
         # multiGPU(chunks, description, outputPath, title, MODEL_PATH)
     else:
-        print("Running in CPU env.")
-        cpuProcess(prompt_inputs, description, model, outputPath, snac_model, title, tokenizer)
+        print("Running in CPU or single GPU env.")
+        singleProcess(prompt_inputs, description, model, outputPath, snac_model, title, tokenizer)
 
 
 def processVoice(model, tokenizer, snac_model, inputs, description, part):
@@ -300,7 +271,7 @@ def saveAudio(outputPath, audio_chunks, title):
     sf.write(outputPath + f'{title}.wav', full_audio, samplerate=24000)
 
 
-def cpuProcess(prompt_inputs, description, model, outputPath, snac_model, title, tokenizer):
+def singleProcess(prompt_inputs, description, model, outputPath, snac_model, title, tokenizer):
     input_lengths = []
     generation_times = []
     writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")

@@ -23,7 +23,9 @@ SOUNDS = [
 
 TTS_TAGS = TONES + SOUNDS
 
-TTS_TAGS_STR = ", ".join(TTS_TAGS)
+TTS_TAGS_SET = set(TTS_TAGS)
+
+TTS_TAGS_STR = ", ".join([t[1:-1] for t in TTS_TAGS])
 
 
 def getDevice():

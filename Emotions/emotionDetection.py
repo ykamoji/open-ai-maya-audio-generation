@@ -1,5 +1,5 @@
-import torch
 import inspect
+import json
 from tqdm import tqdm
 from Emotions.utils import *
 from utils import updateCache
@@ -12,6 +12,25 @@ def get_context(i, sentences):
     return prev_s, curr_s, next_s
 
 
+def extract_emotion_tags(text):
+    match = re.search(r'"tags"\s*:\s*\[([^\]]*)\]', text)
+    if match:
+        inner = match.group(1)
+        tags = str(re.findall(r'"([^"]+)"', inner)).replace("'", '"')
+        # return [f"[{tag.upper()}]" for tag in json.loads(tags) if f"[{tag.upper()}]" in TTS_TAGS]
+        valid_tags = []
+        invalid_tags = []
+        for tag in json.loads(tags):
+            t = f"[{tag.upper()}]"
+            if t in TTS_TAGS_SET:
+                valid_tags.append(t)
+            else:
+                invalid_tags.append(t)
+        return valid_tags, invalid_tags
+
+    return [], []
+
+
 DETECTION_PREFIX = inspect.cleandoc(f"""
         You are a expert TTS emotion cue detector.
 
@@ -20,22 +39,20 @@ DETECTION_PREFIX = inspect.cleandoc(f"""
         Allowed TAGS: {TTS_TAGS_STR}
 
         IMPORTANT RULES:
-        1. Many TARGET sentences are NEUTRAL and must return an empty tag list.
+        1. Many TARGET sentences are NEUTRAL and must return {{"tags": []}}.
         2. If the TARGET sentence expresses no emotion, no vocal tension, and no implied emotional state, you MUST return {{"tags": []}}.
         3. Do NOT guess. If unsure, return {{"tags": []}}.
         4. Only detect emotion if it is clearly present INSIDE the TARGET sentence. 
-           - Emotion in context (previous/next) does NOT count unless the TARGET sentence continues it.
+           - Emotion implied ONLY in context (previous/next) does NOT count unless the TARGET sentence continues it.
         5. NEVER output any tag not in Allowed TAGS.
+        6. Be precise, literal, and deterministic. Avoid creative interpretation beyond observable cues.
 
         TASK:
-        1. Identify all tags that match the emotional tone of the TARGET sentence.
-        2. Rank them by strength.
-        3. Return ONLY the top two tags (0–2 tags).
+        1. Identify any matching emotions of the TARGET sentence, then select and return the single strongest one.
 
         OUTPUT FORMAT (STRICT):
             - If 0 tags match → {{"tags": []}}
-            - If 1 tag matches → {{"tags": ["TAG1"]}}
-            - If 2+ tags match → {{"tags": ["TAG1", "TAG2"]}}
+            - If 1+ tag matches → {{"tags": ["TAG1"]}}
 
         EXAMPLE 1 (emotional)
         PREVIOUS: He clenched the letter tightly.
@@ -71,7 +88,7 @@ DETECTION_PREFIX = inspect.cleandoc(f"""
         """) + "\n"
 
 
-def build_dynamic_suffix(prev_s, curr_s, next_s):
+def build_dynamic_detection_suffix(prev_s, curr_s, next_s):
     return inspect.cleandoc(f"""
         {prev_s}
 
@@ -81,13 +98,45 @@ def build_dynamic_suffix(prev_s, curr_s, next_s):
         NEXT SENTENCE:
         {next_s}
 
-        Answer:
+        OUTPUT:
     """)
 
 
-# DETECTION_STATIC_IDS = None
+VERIFIER_PREFIX = inspect.cleandoc("""
+        You are an expert TTS emotion cue verifier. 
+        Verify whether a TARGET sentence explicitly expresses a specific TONE emotion.
+
+        Verification Rules:
+        1. Confirm the tone ONLY if the TARGET sentence itself clearly expresses that tone
+           through wording, phrasing, attitude, or obvious vocal intent.
+        2. Emotional clues in the PREVIOUS or NEXT sentences do NOT count unless the TARGET
+           sentence directly continues that same emotion.
+        3. A QUESTION (anything ending with '?') is NOT a tone such as ANGRY, SARCASTIC, DISAPPOINTED, or MISCHIEVOUS 
+           unless the wording clearly shows hostility, mockery, frustration, or playful teasing.
+        4. Do NOT guess. If the tone is not clearly present in the TARGET sentence, you MUST respond "NO".
+        5. If the tone IS clearly present in the TARGET sentence, output "YES".
+        6. Output strictly one word: "YES" or "NO".
+        """) + "\n"
+
+
+def build_dynamic_verification_suffix(prev_s, curr_s, next_s, tag):
+    return inspect.cleandoc(f"""
+        TONE TAG TO VERIFY: {tag}
+
+        PREVIOUS: {prev_s}
+        TARGET: {curr_s}
+        NEXT: {next_s}
+        
+        Does the TARGET sentence clearly express the tone {tag}, YES or NO?
+        OUTPUT:
+    """)
+
+
 DETECTION_STATIC_MASK = None
 DETECTION_STATIC_BATCH_PAST = None
+
+VERIFICATION_STATIC_MASK = None
+VERIFICATION_STATIC_BATCH_PAST = None
 
 
 def init_detection_prefix_cache(model, tokenizer, BATCH_SIZE):
@@ -115,11 +164,37 @@ def init_detection_prefix_cache(model, tokenizer, BATCH_SIZE):
     DETECTION_STATIC_BATCH_PAST = repeat_past_kv(detection_static_past, BATCH_SIZE)
 
 
+def init_verification_prefix_cache(model, tokenizer, BATCH_SIZE):
+    global VERIFICATION_STATIC_MASK, VERIFICATION_STATIC_BATCH_PAST
+
+    if VERIFICATION_STATIC_MASK is not None and VERIFICATION_STATIC_BATCH_PAST is not None:
+        return  # already initialized
+
+    device = next(model.parameters()).device
+
+    enc = tokenizer(VERIFIER_PREFIX, return_tensors="pt").to(device)
+    static_ids = enc["input_ids"]  # (1, prefix_len)
+    VERIFICATION_STATIC_MASK = enc["attention_mask"]  # (1, prefix_len)
+
+    with torch.inference_mode():
+        out = model(
+            input_ids=static_ids,
+            attention_mask=VERIFICATION_STATIC_MASK,
+            use_cache=True,
+        )
+
+    # detach so we don't track autograd history
+    verification_static_past = tuple((k.detach(), v.detach()) for k, v in out.past_key_values)
+
+    VERIFICATION_STATIC_BATCH_PAST = repeat_past_kv(verification_static_past, BATCH_SIZE)
+
+
 def detect_batch(title, indices, sentences, model, tokenizer, BATCH_SIZE: int = 20):
     global DETECTION_STATIC_MASK, DETECTION_STATIC_BATCH_PAST
 
     device = next(model.parameters()).device
     init_detection_prefix_cache(model, tokenizer, BATCH_SIZE)
+    init_verification_prefix_cache(model, tokenizer, BATCH_SIZE)
 
     outputs = ["" for _ in range(len(indices))]
 
@@ -129,7 +204,7 @@ def detect_batch(title, indices, sentences, model, tokenizer, BATCH_SIZE: int = 
         dynamic_prompts = []
         for idx in chunk:
             prev_s, curr_s, next_s = get_context(idx, sentences)
-            dynamic_prompts.append(build_dynamic_suffix(prev_s, curr_s, next_s))
+            dynamic_prompts.append(build_dynamic_detection_suffix(prev_s, curr_s, next_s))
 
         dyn = tokenizer(dynamic_prompts, return_tensors="pt", padding=True, add_special_tokens=False).to(device)
         dyn_ids = dyn["input_ids"]  # (B, dyn_len)
@@ -138,7 +213,6 @@ def detect_batch(title, indices, sentences, model, tokenizer, BATCH_SIZE: int = 
         batch_size = dyn_ids.size(0)
         # prefix_len = DETECTION_STATIC_IDS.size(1)
 
-        # full attention mask = [prefix_mask, dyn_mask]
         static_mask = DETECTION_STATIC_MASK.repeat(batch_size, 1)  # (B, prefix_len)
         full_mask = torch.cat([static_mask, dyn_mask], dim=1)  # (B, prefix_len + dyn_len)
 
@@ -148,49 +222,116 @@ def detect_batch(title, indices, sentences, model, tokenizer, BATCH_SIZE: int = 
         if batch_size < BATCH_SIZE:
             past_batch_val = slice_prefix_kv(DETECTION_STATIC_BATCH_PAST, batch_size)
 
-        # logger.debug("Running emotion detection for:")
-        # for idx in chunk:
-        #     logger.debug(f'  "{sentences[idx]}"')
-
         try:
             out_ids = fast_generate(
                 model,
                 dynamic_ids=dyn_ids,
                 attention_mask=full_mask,
-                max_new_tokens=50,
+                max_new_tokens=10,
                 eos_token_id=tokenizer.eos_token_id,
                 past_key_values=past_batch_val,
             )
             batch_outputs = tokenizer.batch_decode(out_ids, skip_special_tokens=True)
 
         except Exception as e:
-            print(f"Exception during inference: {e}. Model cannot detect emotions.")
+            print(f"Exception during detection: {e}. Model cannot detect emotions.")
             batch_outputs = [""] * len(chunk)
         finally:
             out_ids = None
             static_mask = None
             full_mask = None
 
+        verifications = []
         # Parse tags for each sentence
         for local_i, idx in enumerate(chunk):
             try:
-                start_pos = batch_outputs[local_i].find("Answer:")
+                start_pos = batch_outputs[local_i].find("OUTPUT:")
                 if start_pos == -1:
-                    parsed_output = ""
+                    outputs[indices.index(idx)] = ""
                 else:
-                    parsed_output = batch_outputs[local_i][start_pos:]
-                outputs[indices.index(idx)] = parsed_output
+                    tags, invalid_tags = extract_emotion_tags(batch_outputs[local_i][start_pos:])
+                    if tags:
+                        if tags[0] in SOUNDS:
+                            outputs[indices.index(idx)] = [tags[0]] + invalid_tags
+                        else:
+                            verifications.append((tags[0], invalid_tags, idx))
+                    else:
+                        outputs[indices.index(idx)] = invalid_tags
             except Exception as e:
                 print(f"Exception while parsing tags: {e}")
                 outputs[indices.index(idx)] = ""
+
+        if verifications:
+            verified_outputs = tag_verification(model, tokenizer, sentences, BATCH_SIZE, verifications)
+            for idx, modified_tags in verified_outputs.items():
+                outputs[indices.index(idx)] = modified_tags
 
         clear_cache()
 
     return outputs
 
 
-def detectEmotions(Args, pages, notebook_name, section_name, EMOTION_CACHE):
-    model, tokenizer = getModelAndTokenizer(Args)
+def tag_verification(model, tokenizer, sentences, BATCH_SIZE, verifications):
+
+    dynamic_prompts = []
+    for tag, _, idx in verifications:
+        prev_s, curr_s, next_s = get_context(idx, sentences)
+        dynamic_prompts.append(build_dynamic_verification_suffix(prev_s, curr_s, next_s, tag[1:-1]))
+
+    dyn = tokenizer(dynamic_prompts, return_tensors="pt", padding=True, add_special_tokens=False).to(model.device)
+    dyn_ids = dyn["input_ids"]
+    dyn_mask = dyn["attention_mask"]
+
+    batch_size = dyn_ids.size(0)
+
+    # full attention mask = [prefix_mask, dyn_mask]
+    static_mask = VERIFICATION_STATIC_MASK.repeat(batch_size, 1)  # (B, prefix_len)
+    full_mask = torch.cat([static_mask, dyn_mask], dim=1)  # (B, prefix_len + dyn_len)
+
+    # repeat prefix KV across batch
+
+    past_batch_val = VERIFICATION_STATIC_BATCH_PAST
+    if batch_size < BATCH_SIZE:
+        past_batch_val = slice_prefix_kv(VERIFICATION_STATIC_BATCH_PAST, batch_size)
+
+    try:
+        out_ids = fast_generate(
+            model,
+            dynamic_ids=dyn_ids,
+            attention_mask=full_mask,
+            max_new_tokens=10,
+            eos_token_id=tokenizer.eos_token_id,
+            past_key_values=past_batch_val,
+        )
+        batch_outputs = tokenizer.batch_decode(out_ids, skip_special_tokens=True)
+
+    except Exception as e:
+        print(f"Exception during verification: {e}. Model cannot verify emotions.")
+        batch_outputs = ["No"] * len(verifications)
+    finally:
+        out_ids = None
+        static_mask = None
+        full_mask = None
+
+    verified_outputs = {}
+    for local_i, (tag, invalid_tag, idx) in enumerate(verifications):
+        verified_outputs[idx] = []
+        try:
+            start_pos = batch_outputs[local_i].find("OUTPUT:")
+            if start_pos != -1:
+                if "YES" in batch_outputs[local_i][start_pos:].strip().upper():
+                    verified_outputs[idx] = [tag]
+        except Exception as e:
+            print(f"Exception while verifying tags: {e}")
+        finally:
+            verified_outputs[idx] += invalid_tag
+
+    batch_outputs = None
+
+    return verified_outputs
+
+
+def detectEmotions(model, tokenizer, pages, notebook_name, section_name, EMOTION_CACHE):
 
     progress = 0
     for page in tqdm(pages, desc="Pages", ncols=100, position=0):
@@ -217,7 +358,7 @@ def detectEmotions(Args, pages, notebook_name, section_name, EMOTION_CACHE):
                     line_outputs.insert(brk, {"line":""})
 
                 EMOTION_CACHE[notebook_name][section_name][page["title"]] = line_outputs
-                updateCache('emotionCache.json', EMOTION_CACHE)
+                updateCache('cache/emotionCache.json', EMOTION_CACHE)
                 progress += 1
             else:
                 print(f"Something went wrong while detecting emotions for {page['title']}.")

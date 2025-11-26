@@ -5,8 +5,9 @@ import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from collections import Counter, deque
 from Emotions.emotionDetection import TTS_TAGS, TONES
-from Emotions.toneReRanker import rerank
 from tqdm import tqdm
+
+from Emotions.utils import TTS_TAGS_SET
 
 
 #------------------------------------------------------------------------------------
@@ -71,44 +72,19 @@ def voice_post_process(voice_cache):
 
 TAG_STATS_PATH = 'emotion_stats.csv'
 UNKNOWN_STATS_PATH = "unknown_stats.csv"
-unknown_tag_log = {}
+unknown_tag_log = Counter()
 
 DEFAULT_PRESETS = set(TONES + ['[LAUGH_HARDER]'])
 TONES_SET = set(TONES)
-TTS_TAGS_SET = set(TTS_TAGS)
 
-
-if os.path.exists(TAG_STATS_PATH):
-    df_stats = pd.read_csv(TAG_STATS_PATH)
-    global_tag_counts = Counter(dict(zip(df_stats["emotion"], df_stats["count"])))
-else:
-    tag_tracker = {
-        tag.replace("[", "").replace("]", "").lower(): 0
-        for tag in TTS_TAGS
-    }
-    global_tag_counts = Counter(tag_tracker)
+tag_tracker = {
+    tag.replace("[", "").replace("]", "").lower(): 0
+    for tag in TTS_TAGS
+}
+global_tag_counts = Counter(tag_tracker)
 
 HISTORY_WINDOW = 4
 recent_tag_history = deque(maxlen=HISTORY_WINDOW)
-
-
-def extract_emotion_tags(text):
-    match = re.search(r'"tags"\s*:\s*\[([^\]]*)\]', text)
-    if match:
-        inner = match.group(1)
-        tags = str(re.findall(r'"([^"]+)"', inner)).replace("'", '"')
-        # return [f"[{tag.upper()}]" for tag in json.loads(tags) if f"[{tag.upper()}]" in TTS_TAGS]
-        valid_tags = []
-        invalid_tags = []
-        for tag in json.loads(tags):
-            t = f"[{tag.upper()}]"
-            if t in TTS_TAGS_SET:
-                valid_tags.append(t)
-            else:
-                invalid_tags.append(t)
-        return valid_tags, invalid_tags
-
-    return [], []
 
 
 def penalty_tag_check(tag):
@@ -124,7 +100,7 @@ def penalty_tag_check(tag):
 
     high_frequency = [t for t, s in sorted_tags if s > 2]
 
-    if tag in high_frequency:
+    if tag in high_frequency or (len(recent_tag_history) > 1 and recent_tag_history[-2] == tag):
         return True
 
     return False
@@ -136,38 +112,29 @@ def process_emotions(L):
         return {
             "line": "",
             "tag": "",
-            "invalid_tags": [],
+            "invalid_tag": [],
             "messages": []
         }
 
     output = L['output']
-    tags, invalid_tags = extract_emotion_tags(output)
+    tags = []
+    invalid_tags = []
+    for tag in output:
+        if tag in TTS_TAGS_SET:
+            tags.append(tag)
+        else:
+            invalid_tags.append(tag)
 
     messages = []
     if tags:
         messages += [f"Model returned {tags} emotions for \"{line}\""]
 
-    try:
-        candidate_tags = [
-            t.replace("[", "").replace("]", "").lower()
-            for t in tags
-        ]
-        updated, scores = rerank(line, candidate_tags, genre="YA", top_k=2)
-        if len(tags) > 0:
-            if len(updated) == 0 or tags[0] != updated[0]:
-                messages += [f"Re ranking updated from {tags} to {updated} ({scores}) emotions for \"{line}\""]
-    except Exception as e:
-        messages += [f"Error re ranking emotions for \"{line}\""]
-        updated = tags
-
-    best = updated[0] if updated else None
-
-    # best = tags[0] if tags else None
+    best = tags[0] if tags else None
 
     processed = {
         "line": L["line"],
         "invalid_tags": invalid_tags,
-        "messages":[]
+        "messages": []
     }
 
     if best:
@@ -192,12 +159,8 @@ def process_tone_rules(sentence, tag):
         return f"{sentence.strip('.')} {tag}."
 
 
-unknown_tag_log = Counter()
-
-
 ################################# M A I N ############################################
 def emotion_det_post_process(lines, title):
-
     processed_results = [None] * len(lines)
     with ProcessPoolExecutor() as executor:
         futures = {executor.submit(process_emotions, l): i for i, l in enumerate(lines)}
@@ -206,8 +169,6 @@ def emotion_det_post_process(lines, title):
             processed_results[i] = f.result()
 
     cache = []
-
-    global unknown_tag_log
 
     for P in processed_results:
         if P['line'] != "" and 'tag' in P and P['tag']:
@@ -282,16 +243,67 @@ def save_unknown_tag_log():
 #  Insert Tags to lines
 #------------------------------------------------------------------------------------
 
+WINDOW_BACK = 20
+WINDOW_FORWARD = 20
+
+with open('Emotions/emotion_dictionary.json') as f:
+    DICTIONARY = json.load(f)
+
+
+def is_negated(sentence, match_start):
+    text = sentence.lower()
+
+    # Global idioms
+    for idiom in DICTIONARY['NEGATION_IDIOMS']:
+        if re.search(idiom, text):
+            return True
+
+    # Window around match
+    w0 = max(0, match_start - WINDOW_BACK)
+    w1 = min(len(text), match_start + WINDOW_FORWARD)
+    window = text[w0:w1]
+
+    for neg in DICTIONARY['NEGATION_WORDS']:
+        if re.search(neg, window):
+            return True
+
+    return False
+
+
+def char_to_word_index(words, char_pos):
+    running = 0
+    for idx, w in enumerate(words):
+        end = running + len(w)
+        if running <= char_pos < end:
+            return idx
+        running = end + 1
+    return None
+
+
+def lexical_fallback_for_tag(tag, sentence):
+
+    text = sentence.lower()
+    patterns = DICTIONARY['SOUND_CUES'].get(tag, {})
+    words = sentence.split()
+    for pat in patterns:
+        m = re.compile(pat).search(text)
+        if m:
+            start = m.start()
+            if not is_negated(sentence, start):
+                return char_to_word_index(words, start)
+
+    return None
+
 
 def extract_index(output):
     try:
-        match = re.search(r'\{.*?\}', output)
+        match = re.search(r'\{[^{}]*\}', output)
         if match:
             data = json.loads(match.group(0))
             position = data.get("position")
             return position
     except:
-        return "END"
+        return ""
 
 
 def safe_insert(sentence: str, index, tag: str):
@@ -302,6 +314,8 @@ def safe_insert(sentence: str, index, tag: str):
 
 
 shift_pattern_regex = r'^(.*?)([.!?]["\']?)\s*(<[A-Za-z0-9_]+>)\s*$'
+
+
 def shift_emotion_inside(sentence):
     # Pattern:
     #   (1) capture everything before final punctuation
@@ -318,11 +332,13 @@ def shift_emotion_inside(sentence):
 
 
 covert_regex = r'\[([A-Za-z0-9_]+)\]'
+
+
 def convert_tag(text):
     return re.sub(covert_regex, lambda m: f"<{m.group(1).lower()}>", text)
 
-def process_insertions(L):
 
+def process_insertions(L):
     if type(L) == str: return convert_tag(L)
 
     line = L['line']
@@ -331,13 +347,19 @@ def process_insertions(L):
     index = extract_index(output)
 
     if index is None:
-        index = "END"
+        index = ""
         # print(f"Model couldn't find the index in the output \"{decoded}\"\nDefaulting to END.")
 
     # Safeguard index
     is_valid_int = isinstance(index, int) and (0 <= index < len(line.split()))
     if not is_valid_int and index != "END":
-        index = "END"
+        index = ""
+
+    if index == "":
+        index = lexical_fallback_for_tag(tag[1:-1].lower(), line)
+        if not index:
+            return line
+        index = min(index, len(line.split())-1)
 
     tag = f"<{tag[1:-1].lower()}>"
     modified_line = safe_insert(line, index, tag)
@@ -348,7 +370,6 @@ def process_insertions(L):
 
 ################################# M A I N ############################################
 def emotion_inst_post_process(lines, title):
-
     processed_results = [None] * len(lines)
     with ProcessPoolExecutor() as executor:
         futures = {executor.submit(process_insertions, l): i for i, l in enumerate(lines)}
@@ -357,4 +378,3 @@ def emotion_inst_post_process(lines, title):
             processed_results[i] = f.result()
 
     return processed_results
-

@@ -7,11 +7,12 @@ import re
 import argparse
 import soundfile as sf
 import numpy as np
-import logging
 
 from Emotions.emotionPlacement import insertEmotions
 from Emotions.postProcess import voice_post_process, emotion_det_post_process, emotion_inst_post_process
 from Emotions.sumerization import summarization
+from Emotions.utils import getModelAndTokenizer
+from Generator.utils import getModels
 from utils import create_or_load_Cache, create_backup, getChapterNo
 from Emotions.stylize import stylize
 from Emotions.emotionDetection import detectEmotions
@@ -26,12 +27,6 @@ os.environ["ABSL_LOGGING_THRESHOLD"] = "fatal"
 os.environ["XLA_FLAGS"] = "--xla_gpu_cuda_data_dir="
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
-logging.basicConfig(
-    filename='emotions.log',
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
 
 
 def setHeader(step_name):
@@ -66,12 +61,18 @@ class VoiceGenerator:
         self.PageNums = self.Args.Generator.PageNums
         self.PageNums = args.pageNums if args.pageNums else self.PageNums
 
-        with open('contentCache.json') as f:
+        with open('cache/contentCache.json') as f:
             self.CONTENT_CACHE = json.load(f)
 
-        self.TITLE_CACHE = create_or_load_Cache('titleCache.json')
-        self.VOICE_CACHE = create_or_load_Cache('voiceCache.json')
-        self.EMOTION_CACHE = create_or_load_Cache('emotionCache.json')
+        self.TITLE_CACHE = create_or_load_Cache('cache/titleCache.json')
+        self.VOICE_CACHE = create_or_load_Cache('cache/voiceCache.json')
+        self.EMOTION_CACHE = create_or_load_Cache('cache/emotionCache.json')
+        for backup in ['detection', 'detection_post', 'insertion']:
+            create_or_load_Cache(f'cache/backups/{backup}.json')
+
+        self.model, self.tokenizer = None, None
+        if any(x in [1, 3, 4, 6] for x in self.Args.Steps):
+            self.model, self.tokenizer = getModelAndTokenizer(self.Args)
 
     def load_content(self):
         data = []
@@ -137,7 +138,7 @@ class VoiceGenerator:
             if section:
                 section = dict(sorted(section.items(), key=lambda page: getChapterNo(page[0])))
                 cache[self.Args.Graph.NotebookName][self.Args.Graph.SectionName] = section
-                updateCache(step + "Cache.json", cache)
+                updateCache("cache/" +step + "Cache.json", cache)
 
     def checkInPageNums(self, title):
         return self.PageNums and getChapterNo(title) in self.PageNums
@@ -174,7 +175,7 @@ class VoiceGenerator:
 
             if contents_to_process:
                 print(f"\nProcessing {len(contents_to_process)} page(s)")
-                spell_checked_paragraphs = stylize(self.Args, contents_to_process, notebook_name, section_name,
+                spell_checked_paragraphs = stylize(self.model, self.tokenizer, contents_to_process, notebook_name, section_name,
                                                    self.VOICE_CACHE)
                 self.sort()
                 if spell_checked_paragraphs == len(contents_to_process):
@@ -191,7 +192,7 @@ class VoiceGenerator:
             voice_cache = self.VOICE_CACHE[notebook_name][section_name]
             self.VOICE_CACHE[notebook_name][section_name] = voice_post_process(voice_cache)
             self.sort()
-            updateCache('voiceCache.json', self.VOICE_CACHE)
+            updateCache('cache/voiceCache.json', self.VOICE_CACHE)
             print(f"Post processing voice texts completed for {notebook_name} {section_name}.")
             setFooter(step_name)
 
@@ -210,7 +211,7 @@ class VoiceGenerator:
 
             if contents_to_process:
                 print(f"Titles generation for {len(contents_to_process)} page(s)")
-                summarized_paragraphs = summarization(self.Args, contents_to_process, notebook_name, section_name,
+                summarized_paragraphs = summarization(self.model, self.tokenizer, contents_to_process, notebook_name, section_name,
                                                       self.TITLE_CACHE)
                 self.sort()
                 if summarized_paragraphs == len(contents_to_process):
@@ -237,7 +238,7 @@ class VoiceGenerator:
                         })
             if contents_to_process:
                 print(f"\nNeed to detect emotions for {len(contents_to_process)} page(s).")
-                emotion_paragraphs = detectEmotions(self.Args, contents_to_process, notebook_name, section_name,
+                emotion_paragraphs = detectEmotions(self.model, self.tokenizer, contents_to_process, notebook_name, section_name,
                                                     self.EMOTION_CACHE)
 
                 create_backup('detection', self.EMOTION_CACHE)
@@ -261,7 +262,7 @@ class VoiceGenerator:
                     sec_cache[page["title"]] = emotion_det_post_process(emotion_cache[page["title"]], page["title"])
 
             create_backup('detection_post', self.EMOTION_CACHE)
-            updateCache("emotionCache.json", self.EMOTION_CACHE)
+            updateCache("cache/emotionCache.json", self.EMOTION_CACHE)
             self.sort()
             print(f"Post processing Emotions (Detection) completed.")
             setFooter(step_name)
@@ -289,7 +290,7 @@ class VoiceGenerator:
                         })
             if contents_to_process:
                 print(f"\nNeed to add emotions to {len(contents_to_process)} page(s).")
-                emotion_paragraphs = insertEmotions(self.Args, contents_to_process, notebook_name, section_name,
+                emotion_paragraphs = insertEmotions(self.model, self.tokenizer, contents_to_process, notebook_name, section_name,
                                                     self.EMOTION_CACHE)
 
                 create_backup('insertion', self.EMOTION_CACHE)
@@ -312,7 +313,7 @@ class VoiceGenerator:
                 if self.check_insertion_emotion_post_process(page["title"]) or self.checkInPageNums(page["title"]):
                     sec_cache[page["title"]] = emotion_inst_post_process(emotion_cache[page["title"]], page["title"])
                     sec_cache[page["title"]].insert(0, self.add_title(notebook_name, section_name, page["title"]))
-            updateCache("emotionCache.json", self.EMOTION_CACHE)
+            updateCache("cache/emotionCache.json", self.EMOTION_CACHE)
             self.sort()
             print(f"Post processing Emotions (Insertion) completed.")
             setFooter(step_name)
@@ -320,7 +321,14 @@ class VoiceGenerator:
         if 8 in self.Args.Steps:
             step_name = " Voice Generation "
             setHeader(step_name)
-            outputPath = self.Args.Generator.AudioOutputPath.__dict__[self.Args.Platform]
+
+            platform = self.Args.Platform
+            MayaArgs = self.Args.Generator.Maya
+            MODEL_NAME = MayaArgs.ModelName.__dict__[platform]
+            CACHE_PATH = MayaArgs.CachePath.__dict__[platform]
+            voice_model, snac_model, voice_tokenizer = getModels(MODEL_NAME, CACHE_PATH, platform)
+
+            outputPath = self.Args.Generator.AudioOutputPath.__dict__[platform]
             nb_cache = self.EMOTION_CACHE.setdefault(notebook_name, {})
             sec_cache = nb_cache.setdefault(section_name, {})
             audio_chapters = [file for file in glob.glob(outputPath + "audios/*.wav") if "partial" not in file]
@@ -330,7 +338,7 @@ class VoiceGenerator:
                     if self.Args.Generator.OpenAI.Action:
                         openAIConvert(self.Args, content, page["title"])
                     elif self.Args.Generator.Maya.Action:
-                        mayaConvert(self.Args, content, page["title"], outputPath)
+                        mayaConvert(voice_model, snac_model, voice_tokenizer, MayaArgs, content, page["title"], outputPath)
 
             audios = [file for file in glob.glob(outputPath + "audios/*.npy") if "partial" not in file]
             audios.sort(key=os.path.getmtime)
