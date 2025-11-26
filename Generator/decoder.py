@@ -112,17 +112,23 @@ def create_audio(generated_outputs, snac_model, audio_path, title):
     saveAudio(audio_path, audio_frames, title)
 
 
+def getChapter(file):
+    return re.search(r"(?i)\bchat?pter\s*#?\s*(\d+)", file).group(1)
+
+
 def writing_audio(chapters, outputPath):
     audios = []
     for file in glob.glob(outputPath + "/*/*.npy"):
-        number = re.search(r"(?i)\bchat?pter\s*#?\s*(\d+)", file).group(1)
+        number = getChapter(file)
+        if number:
+            number = int(number)
         if "partial" not in file and number in chapters:
             audios.append(file)
         # audios.append(file)
 
-    audios.sort(key=os.path.getmtime)
+    audios.sort(key=lambda x: int(getChapter(x)))
     audiobook = []
-    for audio in audios[-1:]:
+    for audio in audios:
         audiobook.append(np.load(audio))
 
     if len(audiobook) == 1:

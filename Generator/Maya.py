@@ -135,6 +135,9 @@ def convert(Args, pages, outputPath):
         clear_cache()
 
 
+    return processed
+
+
 def processVoice(model, tokenizer, inputs, part):
     try:
         start_time = time.time()

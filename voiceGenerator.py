@@ -330,12 +330,16 @@ class VoiceGenerator:
                     })
             if contents_to_process:
                 print(f"\nNeed to generation voices for {len(contents_to_process)} page(s).")
+                processed = 0
                 if self.Args.Generator.OpenAI.Action:
-                    openAIConvert(self.Args, contents_to_process)
+                    processed = openAIConvert(self.Args, contents_to_process)
                 elif self.Args.Generator.Maya.Action:
-                    mayaConvert(self.Args, contents_to_process, outputPath)
-
-            print(f"Saved npy files in {outputPath} !")
+                    processed = mayaConvert(self.Args, contents_to_process, outputPath)
+                if len(contents_to_process) == processed:
+                    print(f"Voice generation completed!")
+                else:
+                    print(f"Something went wrong! Check the logs.")
+                print(f"Saved npy files in {outputPath} !")
             setFooter(step_name)
 
 
