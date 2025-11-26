@@ -13,7 +13,7 @@ instruction = (
 )
 
 
-def convert(Args, content, title):
+def convert(Args, content):
 
     if "OPEN_AI_KEY" not in os.environ:
         raise Exception("Load OPEN AI Key Access token first !")
@@ -26,7 +26,7 @@ def convert(Args, content, title):
     audio_files = []
     for part, chunk in enumerate(chunks):
 
-        mp3file = f"{title}_{part_count}.mp3"
+        mp3file = f"{content['title']}_{part_count}.mp3"
 
         response = client.audio.speech.create(
             model="gpt-4o-mini-tts",

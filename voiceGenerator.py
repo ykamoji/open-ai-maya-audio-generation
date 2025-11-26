@@ -5,14 +5,10 @@ import random
 import yaml
 import re
 import argparse
-import soundfile as sf
-import numpy as np
-
 from Emotions.emotionPlacement import insertEmotions
 from Emotions.postProcess import voice_post_process, emotion_det_post_process, emotion_inst_post_process
 from Emotions.sumerization import summarization
 from Emotions.utils import getModelAndTokenizer
-from Generator.utils import getModels, getTokenizer, getSnacModel, getARModel
 from utils import create_or_load_Cache, create_backup, getChapterNo
 from Emotions.stylize import stylize
 from Emotions.emotionDetection import detectEmotions
@@ -321,29 +317,23 @@ class VoiceGenerator:
         if 8 in self.Args.Steps:
             step_name = " Voice Generation "
             setHeader(step_name)
-
-            platform = self.Args.Platform
-            MayaArgs = self.Args.Generator.Maya
-            MODEL_NAME = MayaArgs.ModelName.__dict__[platform]
-            CACHE_PATH = MayaArgs.CachePath.__dict__[platform]
-
-            snac_model = getSnacModel(CACHE_PATH)
-            voice_tokenizer = getTokenizer(MODEL_NAME, CACHE_PATH, platform)
-            voice_model = None
-            if platform != 'Kaggle':
-                voice_model = getARModel(MODEL_NAME, CACHE_PATH, platform)
-
-            outputPath = self.Args.Generator.AudioOutputPath.__dict__[platform]
+            outputPath = self.Args.Generator.AudioOutputPath.__dict__[self.Args.Platform]
             nb_cache = self.EMOTION_CACHE.setdefault(notebook_name, {})
             sec_cache = nb_cache.setdefault(section_name, {})
             audio_chapters = [file for file in glob.glob(outputPath + "audios/*.wav") if "partial" not in file]
+            contents_to_process = []
             for page in pages:
                 if page["title"] not in audio_chapters or self.checkInPageNums(page["title"]):
-                    content = sec_cache[page['title']]
-                    if self.Args.Generator.OpenAI.Action:
-                        openAIConvert(self.Args, content, page["title"])
-                    elif self.Args.Generator.Maya.Action:
-                        mayaConvert(voice_model, snac_model, voice_tokenizer, MayaArgs, content, page["title"], outputPath)
+                    contents_to_process.append({
+                        "title": page["title"],
+                        "content": sec_cache[page['title']]
+                    })
+            if contents_to_process:
+                print(f"\nNeed to generation voices for {len(contents_to_process)} page(s).")
+                if self.Args.Generator.OpenAI.Action:
+                    openAIConvert(self.Args, contents_to_process)
+                elif self.Args.Generator.Maya.Action:
+                    mayaConvert(self.Args, contents_to_process, outputPath)
 
             print(f"Saved npy files in {outputPath} !")
             setFooter(step_name)

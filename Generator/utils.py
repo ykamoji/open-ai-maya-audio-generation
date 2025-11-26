@@ -9,18 +9,19 @@ pattern = r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<![A-Z]\.)(?<=\.)\s'
 
 
 def getModels(MODEL_NAME, CACHE_PATH, platform):
-    model = getARModel(CACHE_PATH, MODEL_NAME, platform)
+    model = getARModel(MODEL_NAME, CACHE_PATH, platform)
     tokenizer = getTokenizer(MODEL_NAME, CACHE_PATH, platform)
     snac_model = getSnacModel(CACHE_PATH)
     print("Models loaded")
     return model, snac_model, tokenizer
 
 
-def getARModel(CACHE_PATH, MODEL_NAME, platform):
+def getARModel(MODEL_NAME, CACHE_PATH, platform, device=None):
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_NAME if platform != "Kaggle" else MODEL_NAME + 'Model/',
         cache_dir=CACHE_PATH,
         torch_dtype=torch.float16,
+        device_map={"": device} if device else {"": "balanced"},
         trust_remote_code=True
     )
     model.generation_config.cache_implementation = "static"

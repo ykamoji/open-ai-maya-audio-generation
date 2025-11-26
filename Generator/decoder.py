@@ -1,12 +1,11 @@
 import torch
 import os
-from pathlib import Path
 import soundfile as sf
 import numpy as np
 import glob
 import subprocess
 import re
-from tqdm import tqdm
+from pathlib import Path
 from Emotions.utils import getDevice, clear_cache
 
 CODE_END_TOKEN_ID = 128258
@@ -67,10 +66,11 @@ def saveAudio(outputPath, audio_frames, title):
     file = os.path.join(outputPath, f"{title}.npy")
     Path(outputPath).mkdir(parents=True, exist_ok=True)
     np.save(file, audio_frames)
+    print(f"Saved {title}.")
     # sf.write(outputPath + f'{title}.wav', audio_frames, samplerate=24000)
 
 
-def decode_audio(generated_outputs, snac_model, title):
+def decode_audio(generated_outputs, snac_model):
 
     # Extract SNAC audio tokens
     generated_snac_tokens = []
@@ -79,7 +79,7 @@ def decode_audio(generated_outputs, snac_model, title):
 
     N = len(generated_snac_tokens)
     audio_frames = []
-    for i in tqdm(range(0, N - WIN + 1,  HOP), desc=f"Decoding {title}", ncols=100):
+    for i in range(0, N - WIN + 1,  HOP):
 
         window_tokens = generated_snac_tokens[i: i + WIN]
 
@@ -107,7 +107,7 @@ def decode_audio(generated_outputs, snac_model, title):
 
 def create_audio(generated_outputs, snac_model, audio_path, title):
 
-    audio_frames = decode_audio(generated_outputs, snac_model, title)
+    audio_frames = decode_audio(generated_outputs, snac_model)
 
     saveAudio(audio_path, audio_frames, title)
 
