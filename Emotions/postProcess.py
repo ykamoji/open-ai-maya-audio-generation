@@ -6,7 +6,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from collections import Counter, deque
 from Emotions.emotionDetection import TTS_TAGS, TONES
 from tqdm import tqdm
-
+from pathlib import Path
 from Emotions.utils import TTS_TAGS_SET
 
 
@@ -70,8 +70,7 @@ def voice_post_process(voice_cache):
 #------------------------------------------------------------------------------------
 
 
-TAG_STATS_PATH = 'emotion_stats.csv'
-UNKNOWN_STATS_PATH = "unknown_stats.csv"
+TAG_STATS_PATH = lambda name: f'cache/stats/{name}'
 unknown_tag_log = Counter()
 
 DEFAULT_PRESETS = set(TONES + ['[LAUGH_HARDER]'])
@@ -196,22 +195,37 @@ def emotion_det_post_process(lines, title):
         if 'messages' in P and P['messages']: c['messages'] = P["messages"]
         cache.append(c)
 
-    save_global_stats()
-    save_unknown_tag_log()
+    save_global_stats(title)
+    save_unknown_tag_log(title)
 
     return cache
 
 
-def save_global_stats():
+def save_global_stats(title):
     df = (pd.DataFrame.from_dict(global_tag_counts, orient="index", columns=["count"])
           .reset_index()
           .rename(columns={"index": "emotion"})
           )
     df = df.sort_values("count", ascending=False)
-    df.to_csv(TAG_STATS_PATH, index=False)
+    file = TAG_STATS_PATH(f'{title}_emotion_stats.csv')
+    Path(file).parent.mkdir(parents=True, exist_ok=True)
+    if os.path.exists(file):
+        try:
+            existing = pd.read_csv(file)
+            merged = (
+                pd.concat([existing, df])
+                .groupby("emotion", as_index=False)
+                .sum()
+            )
+        except Exception:
+            merged = df
+    else:
+        merged = df
+    merged = merged.sort_values("count", ascending=False)
+    merged.to_csv(file, index=False)
 
 
-def save_unknown_tag_log():
+def save_unknown_tag_log(title):
     if not unknown_tag_log:
         return
 
@@ -219,10 +233,11 @@ def save_unknown_tag_log():
         [(tag, count) for tag, count in unknown_tag_log.items()],
         columns=["unknown_emotion", "count"]
     )
-
-    if os.path.exists(UNKNOWN_STATS_PATH):
+    file = TAG_STATS_PATH(f'{title}_emotion_hallucinations.csv')
+    Path(file).parent.mkdir(parents=True, exist_ok=True)
+    if os.path.exists(file):
         try:
-            existing = pd.read_csv(UNKNOWN_STATS_PATH)
+            existing = pd.read_csv(file)
             merged = (
                 pd.concat([existing, df])
                 .groupby("unknown_emotion", as_index=False)
@@ -234,7 +249,7 @@ def save_unknown_tag_log():
         merged = df
 
     merged = merged.sort_values("count", ascending=False)
-    merged.to_csv(UNKNOWN_STATS_PATH, index=False)
+    merged.to_csv(file, index=False)
 
 
 #------------------------------------------------------------------------------------

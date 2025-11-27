@@ -2,6 +2,7 @@ import re
 import os
 import yaml
 import json
+from pathlib import Path
 
 class CustomObject:
     def __init__(self, /, **kwargs):
@@ -66,6 +67,7 @@ def create_or_load_Cache(file):
         with open(file) as f:
             CACHE = json.load(f)
     else:
+        Path(file).parent.mkdir(parents=True, exist_ok=True)
         with open(file, 'w') as f:
             json.dump(CACHE, f)
     return CACHE
@@ -80,5 +82,6 @@ def create_backup(step, cache):
 
 
 def updateCache(file, data):
+    Path(file).parent.mkdir(parents=True, exist_ok=True)
     with open(file, 'w') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
