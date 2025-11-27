@@ -36,8 +36,8 @@ Generator:
       Colab: /content/drive/MyDrive/AI/Models/
     Characters:
       - Name: David
-        Description: "Creative, seductively character. Male voice in their 30s with american accent. Low pitch, smooth timbre, slow pacing, neutral tone at high intensity." # 1.25x
+        Description: "Creative, seductively character. Male voice in their 30s with american accent. Normal pitch, gravelly timbre, slow pacing, casual tone at high intensity." # 1.25x
       - Name: Vanessa
-        Description: "Creative, seductively character. Female voice in their 30s with american accent. Low pitch, raspy timbre, slow pacing, casual tone at low intensity." # 1.25x
+        Description: "Creative, seductively character. Female voice in their 30s with american accent. Low pitch, gravelly timbre, slow pacing, casual tone at low intensity." # 1.25x
       - Name: Blake
-        Description: "Creative, dramatic_narrator character. Male voice in their 30s with american accent. Low pitch, warm timbre, very slow pacing, casual tone at mid intensity." # 1.25x
+        Description: "Creative, seductively character. Male voice in their 30s with american accent. Low pitch, warm timbre, slow pacing, casual tone at mid intensity." # 1.25x

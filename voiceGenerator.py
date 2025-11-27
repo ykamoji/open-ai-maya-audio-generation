@@ -88,6 +88,10 @@ class VoiceGenerator:
         elif "suggestion" in titles:
             title = random.choice(titles["suggestion"])
 
+        if title:
+            if not title.endswith('.'):
+                title += '.'
+
         return f"Chapter {number}, " + (f" {title}" if title else "")
 
     def check_detection_emotion_post_process(self, title):

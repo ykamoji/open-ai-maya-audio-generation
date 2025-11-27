@@ -114,9 +114,7 @@ def convert(Args, pages, outputPath):
 
     processed = 0
     for page in tqdm(pages, desc="Pages", ncols=120, position=0):
-
         try:
-
             chunks = batch_sentences(page['content'])
             description = getDescription(MayaArgs, page['title'])
             prompt_inputs = [
@@ -134,17 +132,26 @@ def convert(Args, pages, outputPath):
 
         clear_cache()
 
-
     return processed
+
+
+def estimate_tokens(tok_len):
+    if tok_len <= 60:
+        return tok_len * 11 + 120
+    elif tok_len < 75:
+        return tok_len * 15 + 120
+    else:
+        return tok_len * 18 + 120
 
 
 def processVoice(model, tokenizer, inputs, part):
     try:
+        max_new_tokens = estimate_tokens(len(inputs['input_ids'][0]))
         start_time = time.time()
         with torch.inference_mode():
             outputs = model.generate(
                 **inputs.to(model.device),
-                max_new_tokens=int(len(inputs['input_ids'][0]) * 18 * 1.4),
+                max_new_tokens=max_new_tokens,
                 min_new_tokens=28,  # At least 4 SNAC frames
                 temperature=0.4,
                 top_p=0.9,
@@ -162,7 +169,7 @@ def processVoice(model, tokenizer, inputs, part):
             print(f"Part {part}. EOS token not found.")
         audio_duration = estimate_audio_duration(generated_ids)
         rtf = generation_time / audio_duration if audio_duration > 0 else float('inf')
-        tps = len(generated_ids) / audio_duration if audio_duration > 0 else float("nan")
+        tps = len(generated_ids) / audio_duration if audio_duration > 0 else float("inf")
     except Exception as e:
         print(f"AR model error: {e}")
         generated_ids = 0
@@ -192,7 +199,8 @@ def singleProcess(prompt_inputs, model, snac_model, tokenizer, outputPath, title
         input_length = len(inputs['input_ids'][0])
         input_lengths.append(input_length)
         generation_times.append(generation_time)
-        if step % LOG_STEPS == 0:
+        step += 1
+        if step > 1 and step % LOG_STEPS == 0:
             writer.add_scalar("Evaluation/InputSize", input_length, step)
             writer.add_scalar("Evaluation/AudioDuration", audio_duration, step)
             writer.add_scalar("Performance/GenerationTime", generation_time, step)
@@ -206,7 +214,6 @@ def singleProcess(prompt_inputs, model, snac_model, tokenizer, outputPath, title
                 delete_previous_outputs(audio_path, step)
                 create_audio(generated_outputs, snac_model, audio_path, f"partial_{step}")
 
-        step += 1
     writer.close()
 
     create_audio(generated_outputs, snac_model, audio_path, title)

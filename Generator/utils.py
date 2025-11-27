@@ -21,7 +21,7 @@ def getARModel(MODEL_NAME, CACHE_PATH, platform, device=None):
         MODEL_NAME if platform != "Kaggle" else MODEL_NAME + 'Model/',
         cache_dir=CACHE_PATH,
         torch_dtype=torch.float16,
-        device_map={"": device} if device else {"": "balanced"},
+        device_map={"": device} if device else "balanced",
         trust_remote_code=True
     )
     model.generation_config.cache_implementation = "static"
@@ -65,15 +65,19 @@ def convert_to_sentences(content):
     return [se for se in re.split(pattern, content) if se.strip()]
 
 
-def batch_sentences(lines, limit=14):
+def push_punctuation(line):
+    return f"{line[:-1]} {line[-1]}"
+
+
+def batch_sentences(lines, limit=2):
     paraBreak = "  "
-    result = [lines[0]+paraBreak]
-    current = ""
     lineBreak = " "
+    result = [push_punctuation(lines[0])+paraBreak]
+    current = ""
     for line in lines[1:]:
         if line.strip() == "":
             if current:
-                result.append(f"{current.strip()}{paraBreak}")
+                result.append(f"{push_punctuation(current.strip())}{paraBreak}")
                 current = ""
             else:
                 result[-1] += paraBreak
@@ -81,13 +85,13 @@ def batch_sentences(lines, limit=14):
 
         if len(current.split()) + len(line.split()) > limit:
             if current:
-                result.append(current.strip() + lineBreak)
+                result.append(push_punctuation(current.strip()) + lineBreak)
             current = line
         else:
             current = (current + lineBreak + line).strip() if current else line
 
     if current:
-        result.append(current.strip() + " ")
+        result.append(push_punctuation(current.strip()) + lineBreak)
 
     return result
 
