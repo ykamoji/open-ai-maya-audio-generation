@@ -126,7 +126,7 @@ def paragraph_stylization(title, model, prompts, tokenizer, static_mask, past_ba
                     dynamic_ids=dyn_ids,
                     attention_mask=full_mask,
                     past_key_values=past_batch_val,
-                    max_new_tokens=256,
+                    max_new_tokens=300,
                     # eos_token_id=tokenizer.eos_token_id,
                     temperature=0.15,
                     top_k=40,
