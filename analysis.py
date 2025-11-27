@@ -1,8 +1,7 @@
 import json
-import re
-from collections import defaultdict
 
-def analysis():
+
+def analysis(notebook, section):
 
     metrics = ["count", "avg", "max", "min"]
     params = ["characters", "words", "lines", "paragraphs"]
@@ -14,8 +13,9 @@ def analysis():
             stats[param][metric] = 0
 
     with open('cache/contentCache.json') as f:
-        pages = json.load(f)
+        content = json.load(f)
 
+    pages = content.get(notebook, {}).get(section, {})
     mx, mn = {}, {}
     for param in params:
         mx[param] = 0
@@ -83,5 +83,5 @@ def post_processing_helper():
 
 
 if __name__ == "__main__":
-    analysis()
+    analysis("","")
     # post_processing_helper()

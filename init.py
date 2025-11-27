@@ -3,7 +3,7 @@ import argparse
 import yaml
 import time
 from analysis import analysis
-from utils import CustomObject, get_yaml_loader, updateCache, create_or_load_Cache, content_stats
+from utils import CustomObject, get_yaml_loader, updateCache, create_or_load_Cache, content_stats, getChapterNo
 from GraphAPI.graphs import GraphAPI
 
 
@@ -71,22 +71,35 @@ class Initialization:
             limit = self.Args.Graph.PageLimit
 
         print("Running Page Content API")
+        nb = self.CONTENT_CACHE.setdefault(self.notebook_name, {})
+        section = nb.setdefault(self.section_name, {})
+        progress = 0
         for page in pages[:limit]:
             update_cache = False
-            if self.Args.Graph.RefreshPages or not page["title"] in self.CONTENT_CACHE:
+            if self.Args.Graph.RefreshPages or not page["title"] in section:
                 page_content = self.graph.getContent(page["id"])
-                self.CONTENT_CACHE[page["title"]] = {
+                section[page["title"]] = {
                     "content": page_content,
                     "stats": content_stats(page_content),
                 }
                 update_cache = True
-                print(f"Downloaded the page {page['title']}")
-                time.sleep(5)
 
-            if update_cache: updateCache('cache/contentCache.json', self.CONTENT_CACHE)
+            if update_cache:
+                section = dict(sorted(section.items(), key=lambda x: getChapterNo(x[0])))
+                self.CONTENT_CACHE[self.notebook_name][self.section_name] = section
+                updateCache('cache/contentCache.json', self.CONTENT_CACHE)
+                print(f"Downloaded the page {page['title']}")
+                time.sleep(1)
+
+            progress += 1
+            if progress >= limit:
+                break
+
+
+        print(f"Downloaded the {progress} page(s)")
 
         print("Completed Initialization")
-        analysis()
+        analysis(self.notebook_name, self.section_name)
 
 
 if __name__ == "__main__":

@@ -52,11 +52,11 @@ args2=()
 
 
 
-echo ">> Checking if everything is ready"
+echo ">> Initialization..."
 echo ">> Running: python3 init.py ${args1[*]}"
 python3 init.py "${args1[@]}"
 echo
-echo "All Set !"
+echo "Completed !"
 echo
 echo ">> Running Voice generation steps"
 echo ">> Running: python3 voiceGenerator.py ${args2[*]}"
