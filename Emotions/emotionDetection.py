@@ -266,7 +266,7 @@ def detect_batch(title, indices, sentences, model, tokenizer, outputPath, BATCH_
                 outputs[indices.index(idx)] = modified_tags
 
         end = time.time()
-        writer.add_scalar("EmotionDetection/GenerationTime", end - start, i)
+        writer.add_scalar("EmotionDetection/GenerationTime", end - start, i+1)
 
         clear_cache()
 

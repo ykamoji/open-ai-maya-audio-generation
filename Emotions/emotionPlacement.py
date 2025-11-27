@@ -153,7 +153,7 @@ def insert_emotion_index(title, sentences, tags, model, tokenizer, outputPath, B
             batch_past = None
             clear_cache()
         end = time.time()
-        writer.add_scalar("EmotionPlacement/GenerationTime", (end - start_time), i)
+        writer.add_scalar("EmotionPlacement/GenerationTime", (end - start_time), i+1)
 
     writer.flush()
     writer.close()

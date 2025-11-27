@@ -196,8 +196,8 @@ def summarization(model, tokenizer, pages, notebook_name, section_name, TITLE_CA
                 TITLE_CACHE[notebook_name][section_name][page["title"]] = content
                 updateCache('cache/titleCache.json', TITLE_CACHE)
                 processed += 1
-                writer.add_scalar("Stylization/Words", sum([len(para.split()) for para in page['content']]), processed)
-                writer.add_scalar("Summaries/GenerationTime", (end - start), processed)
+                writer.add_scalar("Stylization/Words", sum([len(para.split()) for para in page['content']]), processed + 1)
+                writer.add_scalar("Summaries/GenerationTime", (end - start), processed + 1)
             else:
                 print(f"No summary found for page {page['title']}")
 
