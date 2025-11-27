@@ -17,8 +17,8 @@ TONES = [
 ]
 
 SOUNDS = [
-    "[LAUGH]", "[LAUGH_HARDER]", "[SIGH]", "[CHUCKLE]", "[GASP]", "[CRY]", "[SCREAM]", "[WHISPER]", "[SNORT]",
-    "[EXHALE]", "[GULP]", "[GIGGLE]"
+    "[LAUGH]", "[LAUGH_HARDER]", "[SIGH]", "[CHUCKLE]", "[CRY]", "[SCREAM]", "[WHISPER]", "[SNORT]",
+    "[EXHALE]", "[GIGGLE]"
 ]
 
 TTS_TAGS = TONES + SOUNDS
