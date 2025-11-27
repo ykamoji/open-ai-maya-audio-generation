@@ -43,6 +43,9 @@ def voice_post_process(voice_cache):
                 split_paragraph = True
                 split_paragraphs_count += 1
 
+            if " (Note:" in paragraph:
+                paragraph = paragraph.split(" (Note:")[0]
+
             cleaned_paragraphs.append(paragraph)
 
         # Keep the list paragraph seperated,
