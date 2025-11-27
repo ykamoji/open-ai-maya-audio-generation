@@ -72,10 +72,10 @@ class VoiceGenerator:
 
     def load_content(self):
         data = []
-        for pages in self.CONTENT_CACHE:
+        for page, details in self.CONTENT_CACHE[self.Args.Graph.NotebookName][self.Args.Graph.SectionName].items():
             data.append({
-                "title": pages,
-                "content": self.CONTENT_CACHE[pages]['content'],
+                "title": page,
+                "content": details['content'],
             })
         return data
 
@@ -139,6 +139,9 @@ class VoiceGenerator:
     def checkInPageNums(self, title):
         return self.PageNums and getChapterNo(title) in self.PageNums
 
+    def getOutputPath(self):
+        return self.Args.Generator.AudioOutputPath[self.Args.Platform]
+
     def generation(self):
 
         notebook_name = self.Args.Graph.NotebookName
@@ -172,7 +175,7 @@ class VoiceGenerator:
             if contents_to_process:
                 print(f"\nProcessing {len(contents_to_process)} page(s)")
                 spell_checked_paragraphs = stylize(self.model, self.tokenizer, contents_to_process, notebook_name, section_name,
-                                                   self.VOICE_CACHE)
+                                                   self.VOICE_CACHE, self.getOutputPath())
                 self.sort()
                 if spell_checked_paragraphs == len(contents_to_process):
                     print(f"Stylization completed!")
@@ -208,7 +211,7 @@ class VoiceGenerator:
             if contents_to_process:
                 print(f"Titles generation for {len(contents_to_process)} page(s)")
                 summarized_paragraphs = summarization(self.model, self.tokenizer, contents_to_process, notebook_name, section_name,
-                                                      self.TITLE_CACHE)
+                                                      self.TITLE_CACHE, self.getOutputPath())
                 self.sort()
                 if summarized_paragraphs == len(contents_to_process):
                     print(f"Summarization completed!")
@@ -235,7 +238,7 @@ class VoiceGenerator:
             if contents_to_process:
                 print(f"\nNeed to detect emotions for {len(contents_to_process)} page(s).")
                 emotion_paragraphs = detectEmotions(self.model, self.tokenizer, contents_to_process, notebook_name, section_name,
-                                                    self.EMOTION_CACHE)
+                                                    self.EMOTION_CACHE, self.getOutputPath())
 
                 create_backup('detection', self.EMOTION_CACHE)
                 self.sort()
@@ -287,7 +290,7 @@ class VoiceGenerator:
             if contents_to_process:
                 print(f"\nNeed to add emotions to {len(contents_to_process)} page(s).")
                 emotion_paragraphs = insertEmotions(self.model, self.tokenizer, contents_to_process, notebook_name, section_name,
-                                                    self.EMOTION_CACHE)
+                                                    self.EMOTION_CACHE, self.getOutputPath())
 
                 create_backup('insertion', self.EMOTION_CACHE)
                 self.sort()

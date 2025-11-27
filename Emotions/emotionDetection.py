@@ -1,5 +1,7 @@
 import inspect
 import json
+import time
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from Emotions.utils import *
 from utils import updateCache
@@ -189,18 +191,15 @@ def init_verification_prefix_cache(model, tokenizer, BATCH_SIZE):
     VERIFICATION_STATIC_BATCH_PAST = repeat_past_kv(verification_static_past, BATCH_SIZE)
 
 
-def detect_batch(title, indices, sentences, model, tokenizer, BATCH_SIZE: int = 20):
+def detect_batch(title, indices, sentences, model, tokenizer, outputPath, BATCH_SIZE):
     global DETECTION_STATIC_MASK, DETECTION_STATIC_BATCH_PAST
-
     device = next(model.parameters()).device
-    init_detection_prefix_cache(model, tokenizer, BATCH_SIZE)
-    init_verification_prefix_cache(model, tokenizer, BATCH_SIZE)
 
     outputs = ["" for _ in range(len(indices))]
-
-    for start in tqdm(range(0, len(indices), BATCH_SIZE), desc=f"{title}", ncols=90, position=1):
-        chunk = indices[start:start + BATCH_SIZE]
-
+    writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
+    for i in tqdm(range(0, len(indices), BATCH_SIZE), desc=f"{title}", ncols=90, position=1):
+        chunk = indices[i:i + BATCH_SIZE]
+        start = time.time()
         dynamic_prompts = []
         for idx in chunk:
             prev_s, curr_s, next_s = get_context(idx, sentences)
@@ -266,13 +265,18 @@ def detect_batch(title, indices, sentences, model, tokenizer, BATCH_SIZE: int = 
             for idx, modified_tags in verified_outputs.items():
                 outputs[indices.index(idx)] = modified_tags
 
+        end = time.time()
+        writer.add_scalar("EmotionDetection/GenerationTime", end - start, i)
+
         clear_cache()
 
+    writer.flush()
+    writer.close()
     return outputs
 
 
 def tag_verification(model, tokenizer, sentences, BATCH_SIZE, verifications):
-
+    global VERIFICATION_STATIC_MASK, VERIFICATION_STATIC_BATCH_PAST
     dynamic_prompts = []
     for tag, _, idx in verifications:
         prev_s, curr_s, next_s = get_context(idx, sentences)
@@ -331,9 +335,15 @@ def tag_verification(model, tokenizer, sentences, BATCH_SIZE, verifications):
     return verified_outputs
 
 
-def detectEmotions(model, tokenizer, pages, notebook_name, section_name, EMOTION_CACHE):
+def detectEmotions(model, tokenizer, pages, notebook_name, section_name, EMOTION_CACHE, outputPath):
 
     progress = 0
+    BATCH_SIZE = 20
+    print("Starting KV batch prefix caching.")
+    init_detection_prefix_cache(model, tokenizer, BATCH_SIZE)
+    init_verification_prefix_cache(model, tokenizer, BATCH_SIZE)
+    print("Completed KV batch prefix caching.")
+
     for page in tqdm(pages, desc="Pages", ncols=100, position=0):
         content = page['content']
         try:
@@ -345,7 +355,7 @@ def detectEmotions(model, tokenizer, pages, notebook_name, section_name, EMOTION
                 lines.extend(split_sentences(paragraph))
 
             indices = list(range(len(lines)))
-            output = detect_batch(page["title"], indices, lines, model, tokenizer)
+            output = detect_batch(page["title"], indices, lines, model, tokenizer, outputPath, BATCH_SIZE)
             if output:
                 line_outputs = []
                 for line_idx, o in enumerate(output):

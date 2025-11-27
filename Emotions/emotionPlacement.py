@@ -1,7 +1,9 @@
 import torch
 import inspect
+import time
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-from Emotions.utils import getModelAndTokenizer, clear_cache, fast_generate, slice_prefix_kv, repeat_past_kv
+from Emotions.utils import clear_cache, fast_generate, slice_prefix_kv, repeat_past_kv
 from utils import updateCache
 
 
@@ -90,19 +92,18 @@ def init_static_placement_cache(tokenizer, model, BATCH_SIZE):
     PLACEMENT_STATIC_BATCH_PAST = repeat_past_kv(placement_static_past, BATCH_SIZE)
 
 
-def insert_emotion_index(title, sentences, tags, model, tokenizer, BATCH_SIZE=20):
+def insert_emotion_index(title, sentences, tags, model, tokenizer, outputPath, BATCH_SIZE):
     N = len(sentences)
     device = next(model.parameters()).device
     placement_indexes = []
 
     global PLACEMENT_STATIC_MASK, PLACEMENT_STATIC_BATCH_PAST
 
-    init_static_placement_cache(tokenizer, model, BATCH_SIZE)
-
-    for start in tqdm(range(0, N, BATCH_SIZE), desc=f"{title}", ncols=90, position=1):
-        batch_sentences = sentences[start:start + BATCH_SIZE]
-        batch_tags = tags[start:start + BATCH_SIZE]
-
+    writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
+    for i in tqdm(range(0, N, BATCH_SIZE), desc=f"{title}", ncols=90, position=1):
+        batch_sentences = sentences[i:i + BATCH_SIZE]
+        batch_tags = tags[i:i + BATCH_SIZE]
+        start_time = time.time()
         dynamic_texts = [build_placement_dynamic(t, s) for t, s in zip(batch_tags, batch_sentences)]
 
         dyn_enc = tokenizer(dynamic_texts, return_tensors="pt", padding=True, add_special_tokens=False).to(device)
@@ -151,12 +152,21 @@ def insert_emotion_index(title, sentences, tags, model, tokenizer, BATCH_SIZE=20
             past_key_values = None
             batch_past = None
             clear_cache()
+        end = time.time()
+        writer.add_scalar("EmotionPlacement/GenerationTime", (end - start_time), i)
+
+    writer.flush()
+    writer.close()
 
     return placement_indexes
 
 
-def insertEmotions(model, tokenizer, pages, notebook_name, section_name, EMOTION_CACHE):
+def insertEmotions(model, tokenizer, pages, notebook_name, section_name, EMOTION_CACHE, outputPath):
 
+    BATCH_SIZE = 20
+    print("Starting KV batch prefix caching.")
+    init_static_placement_cache(tokenizer, model, BATCH_SIZE)
+    print("Completed KV batch prefix caching.")
     progress = 0
     for page in tqdm(pages, desc="Pages", ncols=100, position=0):
         try:
@@ -173,7 +183,7 @@ def insertEmotions(model, tokenizer, pages, notebook_name, section_name, EMOTION
                     lines.append(L['line'])
 
             if sentences:
-                placement_indexes = insert_emotion_index(page['title'], sentences, tags, model, tokenizer)
+                placement_indexes = insert_emotion_index(page['title'], sentences, tags, model, tokenizer, outputPath, BATCH_SIZE)
                 if placement_indexes:
                     for idx, placement in enumerate(placement_indexes):
                         lines.insert(insert_line_pos[idx], {

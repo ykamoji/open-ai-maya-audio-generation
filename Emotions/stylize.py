@@ -1,10 +1,12 @@
 import torch
 import inspect
+import time
+import warnings
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from Generator.utils import createChunks
-from Emotions.utils import getModelAndTokenizer, fast_generate, repeat_past_kv, getDevice, clear_cache, slice_prefix_kv
+from Emotions.utils import repeat_past_kv, getDevice, clear_cache, slice_prefix_kv, fast_generate_sampling
 from utils import updateCache
-import warnings
 from transformers.utils import logging
 
 warnings.filterwarnings("ignore")
@@ -12,17 +14,26 @@ logging.set_verbosity_error()
 
 
 PREFIX_PROMPT = inspect.cleandoc("""
-You are a professional editor preparing manuscripts for audiobook narration. Refine the paragraph to improve clarity, rhythm, 
-and spoken-flow readability while maintaining all story details and staying true to the author’s voice.
+You are a professional editor preparing manuscripts for audiobook narration. 
+Refine the paragraph ONLY for clarity, rhythm, and spoken-flow readability while keeping the author’s exact narrative style, tone and personality intact.
 
 Editing Rules (very important):
-- Preserve the emotional intent, atmosphere, tone, and the author's voice.
-- Maintain pacing and dramatic beats; do not remove key details or shorten the scene.
-- Fix grammar, sentence structure, punctuation, and word choice **only** when it clearly improves clarity or how the text sounds when read aloud.
-- Keep vague or informal language as-is (e.g., "stuff","things","somewhere"); do not make the prose generic or over-polished.
-- Do not introduce new imagery, metaphors, actions, or descriptive elements.
-- Only apply quotation marks when the text explicitly or implicitly indicates that a character is speaking aloud, and preserve the original wording of the spoken line.
-- Keep the writing consistent across sentences and scenes, improving readability without changing meaning.
+1. Preserve all original meaning, emotional intent, atmosphere, tone, pacing, and dramatic beats.
+2. Do NOT "smooth out" unique POV style. 
+3. Keep POV quirks, internal monologue rhythm, sentence fragments, abrupt thoughts, slang, and informal expressions.
+4. Only fix grammar, spelling, punctuation, or light sentence structure when it clearly improves clarity.
+   Do NOT over-polish.
+5. Do NOT replace casual, simple, vague, or informal words (e.g., "stuff", "things", "gotta", "kinda", "somewhere").
+   Maintain the original diction unless fixing a typo.
+6. Preserve all invented or unfamiliar nouns exactly as written.
+7. Do NOT introduce new imagery, metaphors, descriptions, actions, or emotional content.
+8. Use quotation marks ONLY when a character is explicitly speaking aloud.
+   Internal thoughts MUST remain unquoted. Do NOT rewrite spoken lines.
+9. Repetition Rule:
+   - Only adjust repetition if it sounds accidentally clunky when spoken aloud.
+   - Do NOT use fancy synonyms or elevated diction.
+   - Do NOT remove intentional or stylistic repetition.
+   - Do NOT change invented nouns or world-specific terms.
 
 Return only the edited paragraph. If no edits are needed, return it unchanged.
 """) + "\n"
@@ -46,9 +57,11 @@ def build_system_prefix_cache(model, tokenizer):
     return static_ids, static_mask, static_past
 
 
-def stylize(model, tokenizer, pages, notebook_name, section_name, VOICE_CACHE):
+def stylize(model, tokenizer, pages, notebook_name, section_name, VOICE_CACHE, outputPath):
 
+    print("Starting KV batch prefix caching.")
     static_ids, static_mask, static_past = build_system_prefix_cache(model, tokenizer)
+    print("Completed KV batch prefix caching.")
 
     BATCH_SIZE = 20
     past_batch = repeat_past_kv(static_past, BATCH_SIZE)
@@ -58,7 +71,7 @@ def stylize(model, tokenizer, pages, notebook_name, section_name, VOICE_CACHE):
         try:
             chunks = createChunks(content, limit=2000)
             prompts = generate_prompts(chunks)
-            outputs = paragraph_stylization(page["title"], model, prompts, tokenizer, static_mask, past_batch, BATCH_SIZE)
+            outputs = paragraph_stylization(page["title"], model, prompts, tokenizer, static_mask, past_batch, outputPath, BATCH_SIZE)
 
             # Save the page generated
             if outputs:
@@ -75,11 +88,13 @@ def stylize(model, tokenizer, pages, notebook_name, section_name, VOICE_CACHE):
     return processed
 
 
-def paragraph_stylization(title, model, prompts, tokenizer, static_mask, past_batch, BATCH_SIZE):
+def paragraph_stylization(title, model, prompts, tokenizer, static_mask, past_batch, outputPath, BATCH_SIZE):
     outputs = []
     device = next(model.parameters()).device
+    writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
     for i in tqdm(range(0, len(prompts), BATCH_SIZE), desc=f"{title}", ncols=90, position=1):
         try:
+            start = time.time()
             batch_prompts = prompts[i: i + BATCH_SIZE]
             dyn = tokenizer(
                 batch_prompts,
@@ -106,20 +121,25 @@ def paragraph_stylization(title, model, prompts, tokenizer, static_mask, past_ba
                 past_batch_val = slice_prefix_kv(past_batch, batch_size)
 
             with torch.inference_mode():
-                generated = fast_generate(
+                generated = fast_generate_sampling(
                     model,
                     dynamic_ids=dyn_ids,
                     attention_mask=full_mask,
                     past_key_values=past_batch_val,
                     max_new_tokens=256,
-                    eos_token_id=tokenizer.eos_token_id,
+                    # eos_token_id=tokenizer.eos_token_id,
+                    temperature=0.15,
+                    top_k=40,
+                    top_p=0.9,
+                    repetition_penalty=1.05
                 )
-
             gen_only = generated[:, dyn_ids.size(1):]
             for i in range(batch_size):
                 text = tokenizer.decode(gen_only[i], skip_special_tokens=True).strip()
                 outputs.append(text)
-
+            end = time.time()
+            writer.add_scalar("Stylization/Input", dyn_ids.size(1), i)
+            writer.add_scalar("Stylization/GenerationTime", (end - start), i)
         except Exception as e:
             print(f"Error : {e}\n. Model didn't process the batch.")
 
@@ -128,6 +148,8 @@ def paragraph_stylization(title, model, prompts, tokenizer, static_mask, past_ba
             generated = None
             gen_only = None
 
+    writer.flush()
+    writer.close()
     return outputs
 
 

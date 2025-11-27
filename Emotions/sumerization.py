@@ -1,8 +1,10 @@
 import re
 import inspect
 import torch
+import time
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-from Emotions.utils import getModelAndTokenizer, fast_generate_sampling, clear_cache, getDevice
+from Emotions.utils import fast_generate_sampling, clear_cache, getDevice
 from utils import updateCache
 
 PROMPT_PREFIX = inspect.cleandoc(f"""
@@ -159,7 +161,7 @@ def extractSuggestions(output):
     return titles
 
 
-def summarization(model, tokenizer, pages, notebook_name, section_name, TITLE_CACHE):
+def summarization(model, tokenizer, pages, notebook_name, section_name, TITLE_CACHE, outputPath):
 
     global PREFIX_KV_CACHE, PREFIX_ATTN
     enc = tokenizer(PROMPT_PREFIX, return_tensors="pt").to(getDevice())
@@ -176,9 +178,12 @@ def summarization(model, tokenizer, pages, notebook_name, section_name, TITLE_CA
     PREFIX_KV_CACHE = prefix_out.past_key_values
 
     processed = 0
+    writer = SummaryWriter(log_dir=f"{outputPath}runs/Summarization")
     for page in tqdm(pages, desc="Pages", ncols=100):
         try:
+            start = time.time()
             summary = getSummaries(page['content'], model, tokenizer)
+            end = time.time()
             if summary:
                 title_cache = TITLE_CACHE[notebook_name][section_name].get(page["title"], {})
                 content = {
@@ -191,6 +196,8 @@ def summarization(model, tokenizer, pages, notebook_name, section_name, TITLE_CA
                 TITLE_CACHE[notebook_name][section_name][page["title"]] = content
                 updateCache('cache/titleCache.json', TITLE_CACHE)
                 processed += 1
+                writer.add_scalar("Stylization/Words", sum([len(para.split()) for para in page['content']]), processed)
+                writer.add_scalar("Summaries/GenerationTime", (end - start), processed)
             else:
                 print(f"No summary found for page {page['title']}")
 
@@ -198,6 +205,7 @@ def summarization(model, tokenizer, pages, notebook_name, section_name, TITLE_CA
             print(f"Error {e}. Skipping for {page['title']}")
 
         clear_cache()
-
+    writer.flush()
+    writer.close()
     return processed
 
