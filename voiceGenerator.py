@@ -144,7 +144,7 @@ class VoiceGenerator:
         return self.PageNums and getChapterNo(title) in self.PageNums
 
     def getOutputPath(self):
-        return self.Args.Generator.AudioOutputPath[self.Args.Platform]
+        return self.Args.Generator.AudioOutputPath.__dict__[self.Args.Platform]
 
     def generation(self):
 
@@ -327,6 +327,8 @@ class VoiceGenerator:
             outputPath = self.Args.Generator.AudioOutputPath.__dict__[self.Args.Platform]
             nb_cache = self.EMOTION_CACHE.setdefault(notebook_name, {})
             sec_cache = nb_cache.setdefault(section_name, {})
+            if not sec_cache:
+                raise Exception(f"You don't have any emotion lines to process for {notebook_name} {section_name}")
             audio_chapters = [file for file in glob.glob(outputPath + "audios/*.wav") if "partial" not in file]
             contents_to_process = []
             for page in pages:
