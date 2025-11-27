@@ -1,0 +1,148 @@
+import numpy as np
+import os
+import soundfile as sf
+import subprocess
+import re
+import glob
+
+
+# ================================
+# CONFIG
+# ================================
+
+TEMPO = 1.25
+DENOISE_STR = "anlmdn=s=6:p=0.0018"
+EQ_STR = (
+    # "highpass=f=80,"
+    # "equalizer=f=240:t=h:w=420:g=2.2,"        # existing body
+    # "equalizer=f=820:t=h:w=360:g=3.2,"        # existing warmth
+    # "equalizer=f=6000:t=h:w=4000:g=1.2,"      # gentle high-shelf / presence above ~6k
+    # "equalizer=f=10000:t=h:w=8000:g=0.9,"     # slight airy lift 10–16k
+    # "acompressor=threshold=-24dB:ratio=2:attack=5:release=50"
+
+    "highpass=f=80,"
+    "equalizer=f=200:t=h:w=350:g=1.4,"     # warmth restore
+    "equalizer=f=750:t=h:w=480:g=2.6,"     # chest resonance (fix F1)
+    "equalizer=f=3200:t=h:w=2000:g=0.8,"   # clarity band (returns consonant detail)
+    "equalizer=f=7200:t=h:w=2600:g=1.6"    # AIR/SPARKLE BOOST (your main sparkle band)
+
+
+)
+
+LIMITER_STR = "loudnorm=I=-19.4:TP=-3.0:LRA=11"
+
+FFMPEG = "ffmpeg"
+RUBBERBAND = "rubberband-r3"
+
+# ================================
+# HELPER TO RUN COMMANDS
+# ================================
+
+def run(cmd):
+    print(">", " ".join(cmd))
+    subprocess.run(cmd, check=True)
+
+
+def ffmpeg_filter(input_wav, output_wav, filters):
+    cmd = [
+        FFMPEG, "-y",
+        "-i", input_wav,
+        "-af", filters,
+        output_wav
+    ]
+    run(cmd)
+
+
+def ffmpeg_resample(input_wav, output_wav, sr):
+    cmd = [
+        FFMPEG, "-y",
+        "-i", input_wav,
+        "-ar", str(sr),
+        # "-af", "aresample=resampler=soxr",
+        output_wav
+    ]
+    run(cmd)
+
+
+# ================================
+# MAIN FUNCTION
+# ================================
+def process_npy(npy_path, output_wav):
+    # load float32 waveform
+    print("Loading .npy...")
+    audio = np.load(npy_path).astype(np.float32)
+
+    base = os.path.splitext(output_wav)[0]
+
+    # save as wav (PCM 16)
+    raw_wav = f"{base}.wav"
+    sf.write(raw_wav, audio, samplerate=24000, subtype="PCM_24")
+
+    speed = f"{base}_speed.wav"
+    # SPEED UP (tempo only, pitch preserved)
+    run([FFMPEG, "-y", "-i", raw_wav, "-filter:a", f"atempo={TEMPO}", speed])
+
+    # Gentle silence reduction (ACX standard)
+    trimmed = f"{base}_trimmed.wav"
+    run([
+        FFMPEG, "-y", "-i", speed,
+        "-af",
+        "silenceremove=start_silence=0.15:start_threshold=-48dB:stop_silence=0.15:stop_threshold=-48dB",
+        trimmed
+    ])
+    # denoised = f"{base}_denoised.wav"
+    # # Light denoise
+    # run([FFMPEG, "-y", "-i", trimmed, "-af", "anlmdn=s=7:p=0.003", denoised])
+
+    denoised = trimmed
+    eq = f"{base}_eq.wav"
+    # ACX EQ (clarity + naturalness)
+    run([FFMPEG, "-y", "-i", denoised, "-af", EQ_STR, eq])
+
+    limited = f"{base}_limited.wav"
+    # ACX Loudness normalization
+    run([
+        FFMPEG, "-y", "-i", eq,
+        "-af", "loudnorm=I=-19:TP=-3:LRA=11",
+        limited
+    ])
+
+    final = f"{base}_v2.wav"
+    run([FFMPEG, "-y", "-i", limited, "-ar", "48000", final])
+
+    # os.remove(raw_wav)
+    os.remove(speed)
+    os.remove(denoised)
+    # os.remove(trimmed)
+    os.remove(eq)
+    os.remove(limited)
+
+
+# ================================
+
+
+def getChapter(file):
+    return re.search(r"(?i)\bchat?pter\s*#?\s*(\d+)", file).group(1)
+
+
+def search_files(chapters, inputPath):
+    audios = []
+    for file in glob.glob(inputPath + "/*/*.npy"):
+        number = getChapter(file)
+        if number:
+            number = int(number)
+        if "partial" not in file and number in chapters:
+            audios.append(file)
+        # audios.append(file)
+    return audios
+
+
+if __name__ == "__main__":
+
+    chapters = list(range(15, 79))
+    audios = search_files(chapters, 'output/audios')
+
+    for audio in audios:
+        process_npy(audio, "output/audios/audiobook.wav")
+
+
