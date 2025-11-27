@@ -136,7 +136,7 @@ def paragraph_stylization(title, model, prompts, tokenizer, static_mask, past_ba
             gen_only = generated[:, dyn_ids.size(1):]
             for i in range(batch_size):
                 text = tokenizer.decode(gen_only[i], skip_special_tokens=True).strip()
-                outputs.append(text)
+                outputs.append(text.encode("ascii", "ignore").decode().strip())
             end = time.time()
             writer.add_scalar("Stylization/Input", dyn_ids.size(1), i+1)
             writer.add_scalar("Stylization/GenerationTime", (end - start), i+1)

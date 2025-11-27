@@ -15,6 +15,11 @@ from Emotions.utils import TTS_TAGS_SET
 #  Removing assistant data and splitting up paragraphs
 #------------------------------------------------------------------------------------
 
+model_keywords = [
+    "Edited paragraph:",
+    " (Note:"
+]
+
 def voice_post_process(voice_cache):
     post_process_paragraphs = {}
     clean_paragraphs_count = 0
@@ -43,8 +48,9 @@ def voice_post_process(voice_cache):
                 split_paragraph = True
                 split_paragraphs_count += 1
 
-            if " (Note:" in paragraph:
-                paragraph = paragraph.split(" (Note:")[0]
+            for clean_key in model_keywords:
+                if clean_key in paragraph:
+                    paragraph = paragraph.split(clean_key)[0].strip()
 
             cleaned_paragraphs.append(paragraph)
 
