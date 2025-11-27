@@ -249,11 +249,13 @@ def fast_generate_sampling(
             logits[b, seen_tokens] = torch.where(vals < 0, vals * repetition_penalty, vals / repetition_penalty)
 
         # per-filter fallback
-        if torch.isnan(logits).any() or torch.isinf(logits).all():
+        if torch.isnan(logits).any() or torch.isinf(logits).any():
             logits = before
 
         # ----- Temperature scaling -----
         logits = logits / temperature
+
+        logits = torch.clamp(logits, -1e4, 1e4)
 
         # ----- Top-k -----
         before = logits.clone()
@@ -264,7 +266,7 @@ def fast_generate_sampling(
             logits
         )
         # per-filter fallback
-        if torch.isinf(logits).all() or torch.isnan(logits).any():
+        if torch.isinf(logits).any() or torch.isnan(logits).any():
             logits = before
 
         # ----- Top-p (nucleus) -----
@@ -284,7 +286,7 @@ def fast_generate_sampling(
         logits = original
 
         # per-filter fallback
-        if torch.isinf(logits).all() or torch.isnan(logits).any():
+        if torch.isinf(logits).any() or torch.isnan(logits).any():
             logits = before
 
         # ----- 5. Sample next token -----
