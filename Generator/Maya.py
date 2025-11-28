@@ -14,6 +14,16 @@ from Emotions.utils import getDevice, clear_cache
 from Generator.decoder import create_audio
 from Generator.utils import batch_sentences, getARModel, getSnacModel, getTokenizer
 
+
+def _suppress_cpp_warnings():
+    # redirect low-level C++ stderr to /dev/null
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(devnull, 2)  # fd=2 → stderr
+    os.close(devnull)
+
+def _mp_initializer():
+    _suppress_cpp_warnings()
+
 mp.set_start_method("spawn", force=True)
 
 warnings.filterwarnings("ignore")

@@ -11,6 +11,19 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["XLA_FLAGS"] = "--xla_cpu_use_xla=false"
 os.environ["TF_XLA_FLAGS"] = "--tf_xla_enable_xla_devices=false"
 
+
+def _suppress_cpp_warnings():
+    # redirect low-level C++ stderr to /dev/null
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(devnull, 2)  # fd=2 → stderr
+    os.close(devnull)
+
+# Suppress C++/CUDA/XLA warnings for the main process
+_suppress_cpp_warnings()
+
+os.environ["PYTHONWARNINGS"] = "ignore"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
 import absl.logging
 absl.logging.set_verbosity(absl.logging.ERROR)
 
