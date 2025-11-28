@@ -130,7 +130,7 @@ def search_files(chapters, inputPath):
         number = getChapter(file)
         if number:
             number = int(number)
-        if "partial" not in file and number in chapters:
+        if number in chapters : #and "part" not in file:
             audios.append(file)
         # audios.append(file)
     return audios
@@ -140,8 +140,12 @@ if __name__ == "__main__":
 
     chapters = list(range(15, 79))
     audios = search_files(chapters, 'output/audios')
+    audios.sort(key=lambda x: int(getChapter(x)))
 
+    audios = audios[:1]
     for audio in audios:
         process_npy(audio, f"output/audios/audiobook_{getChapter(audio)}.wav")
+
+    print(audios)
 
 

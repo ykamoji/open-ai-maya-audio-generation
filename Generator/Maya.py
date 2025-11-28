@@ -8,10 +8,13 @@ import numpy as np
 import multiprocessing as mp
 from collections import deque
 from tqdm import tqdm
+from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
 from Emotions.utils import getDevice, clear_cache
 from Generator.decoder import create_audio
 from Generator.utils import batch_sentences, getARModel, getSnacModel, getTokenizer
+
+mp.set_start_method("spawn", force=True)
 
 warnings.filterwarnings("ignore")
 
@@ -28,7 +31,7 @@ SOA_ID = 128261
 BOS_ID = 128000
 TEXT_EOT_ID = 128009
 
-LOG_STEPS = 20
+LOG_STEPS = 5
 
 
 def build_prompt(tokenizer, description: str, text: str) -> str:
@@ -51,7 +54,7 @@ def build_prompt(tokenizer, description: str, text: str) -> str:
 
 
 def estimate_audio_duration(generated_ids):
-    snac_count = len([SNAC_MIN_ID <= t <= SNAC_MAX_ID for t in generated_ids])
+    snac_count = sum(1 for t in generated_ids if SNAC_MIN_ID <= t <= SNAC_MAX_ID)
     duration_sec = snac_count * 0.01194 + 0.07499
     return duration_sec
 
@@ -110,10 +113,10 @@ def convert(Args, pages, outputPath):
 
             # br = 0
             # for l, chunk in enumerate(chunks):
+            #     print(chunk + f" Tagged: {tagged_list[l]}")
             #     if br < len(para_breaks) and l == para_breaks[br]:
             #         print("------Para break-------")
             #         br += 1
-            #     print(chunk + f" Tagged: {tagged_list[l]}" )
             #
             # exit(1)
 
@@ -139,11 +142,11 @@ def convert(Args, pages, outputPath):
 
 def estimate_tokens(tok_len):
     if tok_len <= 60:
-        return tok_len * 11 + 120
-    elif tok_len < 75:
-        return tok_len * 15 + 120
+        return tok_len * 12 + 150
+    elif tok_len <= 100:
+        return tok_len * 22 + 150
     else:
-        return tok_len * 18 + 120
+        return tok_len * 24 + 200
 
 
 def processVoice(model, tokenizer, inputs, is_tagged, part):
@@ -154,11 +157,11 @@ def processVoice(model, tokenizer, inputs, is_tagged, part):
             with torch.inference_mode():
                 outputs = model.generate(
                     **inputs.to(model.device),
-                    max_new_tokens=2048,
+                    max_new_tokens=max_new_tokens,
                     min_new_tokens=28,  # At least 4 SNAC frames
-                    temperature=0.35 if is_tagged else 0.25,
-                    top_p=0.92 if is_tagged else 0.8,
-                    repetition_penalty=1.05 if is_tagged else 1.0,
+                    temperature=0.5 if is_tagged else 0.4,
+                    top_p=0.95 if is_tagged else 0.9,
+                    repetition_penalty=1.1,
                     do_sample=True,
                     eos_token_id=CODE_END_TOKEN_ID,  # Stop at end of speech token
                     pad_token_id=tokenizer.pad_token_id,
@@ -168,10 +171,11 @@ def processVoice(model, tokenizer, inputs, is_tagged, part):
             if CODE_END_TOKEN_ID not in generated_tokens:
                 max_new_tokens += 200
                 print(f"\nPart {part}. EOS token not found. Trying again with {max_new_tokens}")
+                del outputs
                 del generated_tokens
             else:
-                eos_position = generated_tokens.index(CODE_END_TOKEN_ID)
-                print(f"Part {part} EOS token found at position {eos_position}/{len(generated_tokens)} for {len(inputs['input_ids'][0])}")
+                # eos_position = generated_tokens.index(CODE_END_TOKEN_ID)
+                # print(f"Part {part} EOS token found at position {eos_position}/{len(generated_tokens)} for {len(inputs['input_ids'][0])}")
                 break
 
         generation_time = time.time() - start_time
@@ -197,18 +201,19 @@ def singleProcess(model, snac_model, tokenizer, outputPath, para_breaks, tagged_
     model = model.to(getDevice())
     snac_model = snac_model.to(getDevice())
     audio_path = outputPath + f"audios/{title}/"
+    Path(audio_path).mkdir(parents=True, exist_ok=True)
     for part, (inputs, is_tagged) in enumerate(tqdm(prompt_inputs, desc=f"{title}", ncols=90, position=1)):
         # print(chunk)
         # print(f"Voice generation for part {step}/{total} ...")
         generated_ids, (generation_time, audio_duration, rtf, tps) = processVoice(model, tokenizer, inputs, is_tagged, part)
-        np.save(generated_ids, audio_path + f"part_{step}")
+        np.save(audio_path + f"part_{step}.npy", generated_ids)
         del generated_ids
         # print(f"Voice generation for part {step} ({audio_duration:.2f} sec) in {generation_time:.2f} sec")
         input_length = len(inputs['input_ids'][0])
         input_lengths.append(input_length)
         generation_times.append(generation_time)
         step += 1
-        if step > 1 and step % LOG_STEPS == 0:
+        if step % LOG_STEPS == 0:
             writer.add_scalar("Evaluation/InputSize", input_length, step)
             writer.add_scalar("Evaluation/AudioDuration", audio_duration, step)
             writer.add_scalar("Performance/GenerationTime", generation_time, step)
@@ -218,13 +223,11 @@ def singleProcess(model, snac_model, tokenizer, outputPath, para_breaks, tagged_
                 correlation = np.corrcoef(input_lengths, generation_times)[0, 1]
                 writer.add_scalar("Performance/InputDurationCorr", correlation, step)
 
-            # if step % (LOG_STEPS * 2) == 0:
-                # delete_previous_outputs(audio_path, step)
-                # create_audio(generated_outputs, snac_model, audio_path, f"partial_{step}")
+        # create_audio(generated_tokens_full, snac_model, audio_path, para_breaks, tagged_list, title)
 
     writer.close()
 
-    part_files = _gather_sorted_part_files(audio_path, title)
+    part_files = _gather_sorted_part_files(outputPath+"/audios/", title)
 
     generated_tokens_full = [np.load(file) for file in part_files]
 
@@ -232,8 +235,6 @@ def singleProcess(model, snac_model, tokenizer, outputPath, para_breaks, tagged_
 
 
 def multiGPU(GPUCount, MODEL_NAME, CACHE_PATH, platform, snac_model, outputPath, para_breaks, tagged_list, prompt_inputs, title):
-
-    mp.set_start_method("spawn", force=True)
 
     manager = mp.Manager()
     task_q = manager.Queue()
@@ -380,7 +381,7 @@ def _gather_sorted_part_files(parts_dir, title):
     return sorted(files, key=idx_from_name)
 
 
-def metric_worker(metrics_q, outputPath, title, done_event, total_parts, log_steps=20):
+def metric_worker(metrics_q, outputPath, title, done_event, total_parts, log_steps=5):
 
     writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
     input_lengths = []
@@ -403,7 +404,7 @@ def metric_worker(metrics_q, outputPath, title, done_event, total_parts, log_ste
             recent.append(metric)
             step = received
 
-            if step > 0 and step % log_steps == 0:
+            if step % log_steps == 0:
                 writer.add_scalar("Evaluation/InputSize", metric.get("text_len", 0), step)
                 writer.add_scalar("Evaluation/AudioDuration", metric.get("audio_duration", 0), step)
                 writer.add_scalar("Performance/GenerationTime", metric.get("generation_time", 0), step)

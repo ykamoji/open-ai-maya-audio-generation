@@ -62,37 +62,55 @@ def convert_to_sentences(content):
     return [se for se in re.split(pattern, content) if se.strip()]
 
 
-pat = r"\s*(<[^>]+>)\s*"
+_tag_pat = re.compile(r"\s*(<[^>]+>)\s*")
 
 
 def batch_sentences(lines, limit=20):
-    result = [lines[0]]
-    para_breaks = [1]
-    current = ""
-    for line in lines[1:]:
-        if line.strip() == "":
-            if current:
-                result.append(current.strip())
-                current = ""
-            para_breaks.append(len(result))
+    chunks = []
+    para_breaks = []
+    current_tokens = []
+
+    def flush_current():
+        if not current_tokens:
+            return False
+        chunk_text = " ".join(current_tokens).strip()
+        chunks.append(chunk_text)
+        current_tokens.clear()
+        return True
+
+    for line in lines:
+        stripped = line.rstrip("\n")
+
+        if stripped.strip() == "":
+            did_flush = flush_current()
+            if did_flush:
+                para_breaks.append(len(chunks) - 1)
             continue
 
-        if len(current.split()) + len(line.split()) > limit:
-            if current:
-                result.append(current.strip())
-            current = line
+        tokens = stripped.strip()
+        if not current_tokens:
+            current_tokens.append(tokens)
         else:
-            current = (current + " " + line).strip() if current else line
+            curr_wc = sum(len(s.split()) for s in current_tokens)
+            new_wc = len(tokens.split())
+            if curr_wc + new_wc > limit:
+                flush_current()
+                current_tokens.append(tokens)
+            else:
+                current_tokens.append(tokens)
 
-    if current:
-        result.append(current.strip())
+    flush_current()
+
+    if len(chunks) > 0:
+        if 0 not in para_breaks:
+            para_breaks.insert(0, 0)
 
     tagged_list = [
-        True if re.search(pat, result[i]) else False
-        for i in range(len(result))
+        bool(_tag_pat.search(chunk))
+        for chunk in chunks
     ]
 
-    return result, tagged_list, para_breaks
+    return chunks, tagged_list, para_breaks
 
 
 def paraChunks(paragraphs, limit):

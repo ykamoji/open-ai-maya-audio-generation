@@ -347,8 +347,8 @@ class VoiceGenerator:
                 if len(contents_to_process) == processed:
                     print(f"Voice generation completed!")
                     print(f"Audio files in {outputPath} !")
-                    for audio in audio_chapters:
-                        process_npy(audio, f"output/audios/audiobook_{getChapterNo(audio)}.wav")
+                    # for audio in audio_chapters:
+                    #     process_npy(audio, f"output/audios/audiobook_{getChapterNo(audio)}.wav")
                 else:
                     print(f"Something went wrong! Check the logs.")
             setFooter(step_name)

@@ -228,59 +228,60 @@ def analyze(audio_path):
     # ------------------------------------------------------------
     # SILENCE DETECTION
     # ------------------------------------------------------------
-    # chunk = int(sr * (SILENCE_CHUNK_MS / 1000))
-    # frame_db_values = []
-    #
-    # # compute per-frame RMS in dB
-    # for i in range(0, len(y), chunk):
-    #     frame = y[i:i + chunk]
-    #     rms_val = np.sqrt(np.mean(frame ** 2) + 1e-12)
-    #     db_val = librosa.amplitude_to_db(np.array([rms_val]), ref=np.max)[0]
-    #     frame_db_values.append(db_val)
-    #
-    # frame_db_values = np.array(frame_db_values)
-    #
-    # # quick diagnostics (paste after frame_db_values computed)
-    # print("FRAME DB STATS: min, 10%, 25%, median, 75%, 90%, max")
-    # q = np.percentile(frame_db_values, [0, 10, 25, 50, 75, 90, 100])
-    # print(np.round(q, 2))
-    # # show how many frames fall say 4/6/8/10 dB below median
-    # med = np.median(frame_db_values)
-    # for d in (4, 6, 8, 10, 12):
-    #     print(f"frames below median-{d}dB:", np.sum(frame_db_values < (med - d)))
-    #
-    # # Moving average
-    # def moving_average(a, n=20):
-    #     ret = np.cumsum(a, dtype=float)
-    #     ret[n:] = ret[n:] - ret[:-n]
-    #     return np.concatenate([
-    #         np.repeat(a[:n].mean(), n - 1),
-    #         ret[n - 1:] / n
-    #     ])
-    #
-    # ma = moving_average(frame_db_values, MA_WINDOW)
-    #
-    # # Silence = current frame is lower than moving average minus RELATIVE_DIP_DB
-    # silence_mask = frame_db_values < (ma - RELATIVE_DIP_DB)
-    #
-    # # group segments
-    # silent_segments = []
-    # start = None
-    # for idx, is_silent in enumerate(silence_mask):
-    #     if is_silent and start is None:
-    #         start = idx
-    #     if not is_silent and start is not None:
-    #         silent_segments.append((start, idx))
-    #         start = None
-    # if start is not None:
-    #     silent_segments.append((start, len(silence_mask)))
-    #
-    # print("Detected silent segments:")
-    # for s, e in silent_segments:
-    #     dur = (e - s) * SILENCE_CHUNK_MS
-    #     if dur >= MIN_SILENCE_MS:
-    #         print(f"  {s * SILENCE_CHUNK_MS / 1000:.2f}s → {e * SILENCE_CHUNK_MS / 1000:.2f}s ({dur:.1f}ms)")
-    #
+
+    chunk = int(sr * (SILENCE_CHUNK_MS / 1000))
+    frame_db_values = []
+
+    # compute per-frame RMS in dB
+    for i in range(0, len(y), chunk):
+        frame = y[i:i + chunk]
+        rms_val = np.sqrt(np.mean(frame ** 2) + 1e-12)
+        db_val = librosa.amplitude_to_db(np.array([rms_val]), ref=np.max)[0]
+        frame_db_values.append(db_val)
+
+    frame_db_values = np.array(frame_db_values)
+
+    # quick diagnostics (paste after frame_db_values computed)
+    print("FRAME DB STATS: min, 10%, 25%, median, 75%, 90%, max")
+    q = np.percentile(frame_db_values, [0, 10, 25, 50, 75, 90, 100])
+    print(np.round(q, 2))
+    # show how many frames fall say 4/6/8/10 dB below median
+    med = np.median(frame_db_values)
+    for d in (4, 6, 8, 10, 12):
+        print(f"frames below median-{d}dB:", np.sum(frame_db_values < (med - d)))
+
+    # Moving average
+    def moving_average(a, n=20):
+        ret = np.cumsum(a, dtype=float)
+        ret[n:] = ret[n:] - ret[:-n]
+        return np.concatenate([
+            np.repeat(a[:n].mean(), n - 1),
+            ret[n - 1:] / n
+        ])
+
+    ma = moving_average(frame_db_values, MA_WINDOW)
+
+    # Silence = current frame is lower than moving average minus RELATIVE_DIP_DB
+    silence_mask = frame_db_values < (ma - RELATIVE_DIP_DB)
+
+    # group segments
+    silent_segments = []
+    start = None
+    for idx, is_silent in enumerate(silence_mask):
+        if is_silent and start is None:
+            start = idx
+        if not is_silent and start is not None:
+            silent_segments.append((start, idx))
+            start = None
+    if start is not None:
+        silent_segments.append((start, len(silence_mask)))
+
+    print("Detected silent segments:")
+    for s, e in silent_segments:
+        dur = (e - s) * SILENCE_CHUNK_MS
+        if dur >= MIN_SILENCE_MS:
+            print(f"  {s * SILENCE_CHUNK_MS / 1000:.2f}s → {e * SILENCE_CHUNK_MS / 1000:.2f}s ({dur:.1f}ms)")
+
     # # ------------------------------------------------------------
     # # PLOTS
     # # ------------------------------------------------------------
@@ -335,7 +336,7 @@ def analyze(audio_path):
 
 if __name__ == "__main__":
 
-    audio = "output/audios/audiobook_v2.wav"
+    audio = "output/audios/audiobook_15_s_v1.wav"
 
     analyze(audio)
 
