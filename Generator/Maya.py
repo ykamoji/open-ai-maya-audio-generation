@@ -24,9 +24,6 @@ def _suppress_cpp_warnings():
 def _mp_initializer():
     _suppress_cpp_warnings()
 
-
-mp.set_start_method("spawn", force=True)
-
 warnings.filterwarnings("ignore")
 
 CODE_START_TOKEN_ID = 128257
