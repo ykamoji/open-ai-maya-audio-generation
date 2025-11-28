@@ -145,12 +145,10 @@ def insert_emotion_index(title, sentences, tags, model, tokenizer, outputPath, B
                 placement_indexes.append("END")
 
         finally:
-            decoded_batch = None
-            out_ids = None
-            gen_only = None
-            full_mask = None
-            past_key_values = None
-            batch_past = None
+            del decoded_batch
+            del out_ids
+            del gen_only
+            del full_mask
             clear_cache()
         end = time.time()
         writer.add_scalar("EmotionPlacement/GenerationTime", (end - start_time), i+1)
@@ -201,8 +199,8 @@ def insertEmotions(model, tokenizer, pages, notebook_name, section_name, EMOTION
             print(f"Exception: {e}. Skipping {page['title']}.")
 
     global PLACEMENT_STATIC_MASK, PLACEMENT_STATIC_BATCH_PAST
-    PLACEMENT_STATIC_MASK = None
-    PLACEMENT_STATIC_BATCH_PAST = None
+    del PLACEMENT_STATIC_MASK
+    del PLACEMENT_STATIC_BATCH_PAST
     clear_cache()
 
     return progress

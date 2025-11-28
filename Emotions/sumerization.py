@@ -142,9 +142,9 @@ def getSummaries(content, model, tokenizer):
     except Exception as e:
         print(f"Model Error {e}.")
     finally:
-        generated = None
-        decoded = None
-        output = None
+        del generated
+        del decoded
+        del output
 
     return response
 
@@ -207,5 +207,8 @@ def summarization(model, tokenizer, pages, notebook_name, section_name, TITLE_CA
         clear_cache()
     writer.flush()
     writer.close()
+
+    del PREFIX_KV_CACHE
+    del PREFIX_ATTN
     return processed
 

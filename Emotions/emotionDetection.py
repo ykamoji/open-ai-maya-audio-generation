@@ -236,9 +236,9 @@ def detect_batch(title, indices, sentences, model, tokenizer, outputPath, BATCH_
             print(f"Exception during detection: {e}. Model cannot detect emotions.")
             batch_outputs = [""] * len(chunk)
         finally:
-            out_ids = None
-            static_mask = None
-            full_mask = None
+            del out_ids
+            del static_mask
+            del full_mask
 
         verifications = []
         # Parse tags for each sentence
@@ -313,9 +313,9 @@ def tag_verification(model, tokenizer, sentences, BATCH_SIZE, verifications):
         print(f"Exception during verification: {e}. Model cannot verify emotions.")
         batch_outputs = ["No"] * len(verifications)
     finally:
-        out_ids = None
-        static_mask = None
-        full_mask = None
+        del out_ids
+        del static_mask
+        del full_mask
 
     verified_outputs = {}
     for local_i, (tag, invalid_tag, idx) in enumerate(verifications):
@@ -330,7 +330,7 @@ def tag_verification(model, tokenizer, sentences, BATCH_SIZE, verifications):
         finally:
             verified_outputs[idx] += invalid_tag
 
-    batch_outputs = None
+    del batch_outputs
 
     return verified_outputs
 
@@ -375,9 +375,10 @@ def detectEmotions(model, tokenizer, pages, notebook_name, section_name, EMOTION
         except Exception as e:
             print(f"Exception: {e}. Skipping {page['title']}.")
 
-    DETECTION_STATIC_IDS = None
-    DETECTION_STATIC_MASK = None
-    DETECTION_STATIC_BATCH_PAST = None
+    del DETECTION_STATIC_MASK
+    del DETECTION_STATIC_BATCH_PAST
+    del VERIFICATION_STATIC_MASK
+    del VERIFICATION_STATIC_BATCH_PAST
     clear_cache()
 
     return progress

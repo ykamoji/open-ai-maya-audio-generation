@@ -144,9 +144,9 @@ def paragraph_stylization(title, model, prompts, tokenizer, static_mask, past_ba
             print(f"Error : {e}\n. Model didn't process the batch.")
 
         finally:
-            dyn = None
-            generated = None
-            gen_only = None
+            del dyn
+            del generated
+            del gen_only
 
     writer.flush()
     writer.close()
