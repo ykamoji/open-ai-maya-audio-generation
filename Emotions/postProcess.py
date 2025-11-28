@@ -54,7 +54,7 @@ def voice_post_process(voice_cache):
                     clean_paragraphs_count += 1
                     paragraph = paragraph.split(clean_key)[0].strip()
 
-            cleaned_paragraphs.append(paragraph)
+            cleaned_paragraphs.append(paragraph.replace("\n", ""))
 
         # Keep the list paragraph seperated,
         if split_paragraph:
