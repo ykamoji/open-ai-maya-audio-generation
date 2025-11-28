@@ -1,4 +1,12 @@
 import os
+# Suppress env warnings
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
+os.environ["ABSL_LOGGING_THRESHOLD"] = "fatal"
+os.environ["XLA_FLAGS"] = "--xla_gpu_cuda_data_dir="
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 import glob
 import json
 import random
@@ -15,14 +23,6 @@ from Emotions.emotionDetection import detectEmotions
 from utils import CustomObject, get_yaml_loader, updateCache
 from Generator.OpenAI import convert as openAIConvert
 from Generator.Maya import convert as mayaConvert
-
-# Suppress env warnings
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
-os.environ["ABSL_LOGGING_THRESHOLD"] = "fatal"
-os.environ["XLA_FLAGS"] = "--xla_gpu_cuda_data_dir="
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 def setHeader(step_name):
