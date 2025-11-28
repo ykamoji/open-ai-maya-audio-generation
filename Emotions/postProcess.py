@@ -17,7 +17,8 @@ from Emotions.utils import TTS_TAGS_SET
 
 model_keywords = [
     "Edited paragraph:",
-    " (Note:"
+    "(Note:",
+    "Reasoning:"
 ]
 
 def voice_post_process(voice_cache):
@@ -50,6 +51,7 @@ def voice_post_process(voice_cache):
 
             for clean_key in model_keywords:
                 if clean_key in paragraph:
+                    clean_paragraphs_count += 1
                     paragraph = paragraph.split(clean_key)[0].strip()
 
             cleaned_paragraphs.append(paragraph)
@@ -64,7 +66,13 @@ def voice_post_process(voice_cache):
                         final_paragraphs.append(block)
             cleaned_paragraphs = final_paragraphs
 
-        post_process_paragraphs[key] = cleaned_paragraphs
+        # When somehow everything missed
+        final_paragraphs = []
+        for paragraph in cleaned_paragraphs:
+            if not paragraph.startswith("(Note:") and not paragraph.startswith("Note:"):
+                final_paragraphs.append(paragraph)
+
+        post_process_paragraphs[key] = final_paragraphs
 
     print(f"{clean_paragraphs_count} paragraphs cleaned, {split_paragraphs_count} new paragraphs splits.")
 
