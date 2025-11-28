@@ -3,15 +3,15 @@ import os
 from auto_tone_equalize import process_npy
 
 
-# def _suppress_cpp_warnings():
-#     # redirect low-level C++ stderr to /dev/null
-#     devnull = os.open(os.devnull, os.O_WRONLY)
-#     os.dup2(devnull, 2)  # fd=2 → stderr
-#     os.close(devnull)
-#
-#
-# # Suppress C++/CUDA/XLA warnings for the main process
-# _suppress_cpp_warnings()
+def _suppress_cpp_warnings():
+    # redirect low-level C++ stderr to /dev/null
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(devnull, 2)  # fd=2 → stderr
+    os.close(devnull)
+
+
+# Suppress C++/CUDA/XLA warnings for the main process
+_suppress_cpp_warnings()
 
 import glob
 import json

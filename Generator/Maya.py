@@ -14,15 +14,15 @@ from Generator.decoder import create_audio
 from Generator.utils import batch_sentences, getARModel, getSnacModel, getTokenizer
 
 
-# def _suppress_cpp_warnings():
-#     # redirect low-level C++ stderr to /dev/null
-#     devnull = os.open(os.devnull, os.O_WRONLY)
-#     os.dup2(devnull, 2)  # fd=2 → stderr
-#     os.close(devnull)
-#
-#
-# def _mp_initializer():
-#     _suppress_cpp_warnings()
+def _suppress_cpp_warnings():
+    # redirect low-level C++ stderr to /dev/null
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(devnull, 2)  # fd=2 → stderr
+    os.close(devnull)
+
+
+def _mp_initializer():
+    _suppress_cpp_warnings()
 
 
 mp.set_start_method("spawn", force=True)
@@ -248,10 +248,9 @@ def singleProcess(model, snac_model, tokenizer, outputPath, para_breaks, tagged_
 
 def multiGPU(GPUCount, MODEL_NAME, CACHE_PATH, platform, snac_model, outputPath, para_breaks, tagged_list,
              prompt_inputs, title):
-    manager = mp.Manager()
-    task_q = manager.Queue()
-    metrics_q = manager.Queue()
-    done_event = manager.Event()
+    task_q = mp.Queue()
+    metrics_q = mp.Queue()
+    done_event = mp.Event()
 
     audio_path = outputPath + f"audios/{title}/"
 
