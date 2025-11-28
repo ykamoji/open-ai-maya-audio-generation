@@ -90,8 +90,16 @@ def decode_audio(generated_outputs, snac_model):
 
 
 def create_audio(generated_outputs, snac_model, audio_path, title):
+    completed = True
+    try:
+        audio_frames = decode_audio(generated_outputs, snac_model)
 
-    audio_frames = decode_audio(generated_outputs, snac_model)
+        saveAudio(audio_path, audio_frames, title)
+    except Exception as e:
+        print(f"Snac model Decoding error: {e}")
+        completed = False
 
-    saveAudio(audio_path, audio_frames, title)
+    return completed
+
+
 

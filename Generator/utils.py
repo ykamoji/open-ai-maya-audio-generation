@@ -33,7 +33,6 @@ def getARModel(MODEL_NAME, CACHE_PATH, platform, device=None):
 def getSnacModel(CACHE_PATH):
     snac_model = SNAC.from_pretrained("hubertsiuzdak/snac_24khz",
                                       cache_dir=CACHE_PATH).eval()
-    snac_model = snac_model.to(getDevice())
     return snac_model
 
 
