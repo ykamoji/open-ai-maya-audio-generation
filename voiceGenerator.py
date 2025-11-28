@@ -88,8 +88,8 @@ class VoiceGenerator:
         title = ""
         if "best" in titles:
             title = titles["best"]
-        elif "suggestion" in titles:
-            title = random.choice(titles["suggestion"])
+        elif "suggestions" in titles:
+            title = random.choice(titles["suggestions"])
 
         if title:
             if not title.endswith('.'):
