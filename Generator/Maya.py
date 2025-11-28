@@ -4,6 +4,7 @@ import glob
 import time
 import warnings
 import numpy as np
+import sys
 import multiprocessing as mp
 from collections import deque
 from tqdm import tqdm
@@ -395,7 +396,7 @@ def metric_worker(metrics_q, outputPath, title, done_event, total_parts, log_ste
     received = 0
     errors = 0
     recent = deque(maxlen=1000)
-    pbar = tqdm(total=total_parts, desc=f"{title}", ncols=90, position=1)
+    pbar = tqdm(total=total_parts, desc=f"{title}", ncols=90, position=1, file=sys.stdout)
     while True:
         try:
             metric = metrics_q.get(timeout=1.0)
