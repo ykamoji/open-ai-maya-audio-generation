@@ -10,7 +10,7 @@ import glob
 # CONFIG
 # ================================
 
-TEMPO = 1.25
+TEMPO = 1.35
 DENOISE_STR = "anlmdn=s=6:p=0.0018"
 EQ_STR = (
     # "highpass=f=80,"
