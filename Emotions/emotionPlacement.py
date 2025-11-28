@@ -139,6 +139,9 @@ def insert_emotion_index(title, sentences, tags, model, tokenizer, outputPath, B
             for i in range(batch_size):
                 placement_indexes.append(decoded_batch[i])
 
+            if batch_size < BATCH_SIZE:
+                del past_batch_val
+
         except Exception as e:
             print(f"Exception: {e}. Defaulting emotion to the end of sentence in this batch")
             for i in range(batch_size):

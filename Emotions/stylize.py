@@ -140,6 +140,8 @@ def paragraph_stylization(title, model, prompts, tokenizer, static_mask, past_ba
             end = time.time()
             writer.add_scalar("Stylization/Input", dyn_ids.size(1), i+1)
             writer.add_scalar("Stylization/GenerationTime", (end - start), i+1)
+            if batch_size < BATCH_SIZE:
+                del past_batch_val
         except Exception as e:
             print(f"Error : {e}\n. Model didn't process the batch.")
 

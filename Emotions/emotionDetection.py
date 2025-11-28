@@ -232,10 +232,14 @@ def detect_batch(title, indices, sentences, model, tokenizer, outputPath, BATCH_
             )
             batch_outputs = tokenizer.batch_decode(out_ids, skip_special_tokens=True)
 
+            if batch_size < BATCH_SIZE:
+                del past_batch_val
+
         except Exception as e:
             print(f"Exception during detection: {e}. Model cannot detect emotions.")
             batch_outputs = [""] * len(chunk)
         finally:
+            del batch_outputs
             del out_ids
             del static_mask
             del full_mask
@@ -308,6 +312,9 @@ def tag_verification(model, tokenizer, sentences, BATCH_SIZE, verifications):
             past_key_values=past_batch_val,
         )
         batch_outputs = tokenizer.batch_decode(out_ids, skip_special_tokens=True)
+
+        if batch_size < BATCH_SIZE:
+            del past_batch_val
 
     except Exception as e:
         print(f"Exception during verification: {e}. Model cannot verify emotions.")
