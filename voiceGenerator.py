@@ -6,9 +6,10 @@ from auto_tone_equalize import process_npy
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
 os.environ["ABSL_LOGGING_THRESHOLD"] = "fatal"
-os.environ["XLA_FLAGS"] = "--xla_gpu_cuda_data_dir="
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["XLA_FLAGS"] = "--xla_cpu_use_xla=false"
+os.environ["TF_XLA_FLAGS"] = "--tf_xla_enable_xla_devices=false"
 
 import absl.logging
 absl.logging.set_verbosity(absl.logging.ERROR)
