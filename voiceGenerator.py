@@ -2,30 +2,16 @@ import os
 
 from auto_tone_equalize import process_npy
 
-# Suppress env warnings
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
-os.environ["ABSL_LOGGING_THRESHOLD"] = "fatal"
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-os.environ["XLA_FLAGS"] = "--xla_cpu_use_xla=false"
-os.environ["TF_XLA_FLAGS"] = "--tf_xla_enable_xla_devices=false"
 
-
-def _suppress_cpp_warnings():
-    # redirect low-level C++ stderr to /dev/null
-    devnull = os.open(os.devnull, os.O_WRONLY)
-    os.dup2(devnull, 2)  # fd=2 → stderr
-    os.close(devnull)
-
-# Suppress C++/CUDA/XLA warnings for the main process
-_suppress_cpp_warnings()
-
-os.environ["PYTHONWARNINGS"] = "ignore"
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-
-import absl.logging
-absl.logging.set_verbosity(absl.logging.ERROR)
+# def _suppress_cpp_warnings():
+#     # redirect low-level C++ stderr to /dev/null
+#     devnull = os.open(os.devnull, os.O_WRONLY)
+#     os.dup2(devnull, 2)  # fd=2 → stderr
+#     os.close(devnull)
+#
+#
+# # Suppress C++/CUDA/XLA warnings for the main process
+# _suppress_cpp_warnings()
 
 import glob
 import json
@@ -158,7 +144,7 @@ class VoiceGenerator:
             if section:
                 section = dict(sorted(section.items(), key=lambda page: getChapterNo(page[0])))
                 cache[self.Args.Graph.NotebookName][self.Args.Graph.SectionName] = section
-                updateCache("cache/" +step + "Cache.json", cache)
+                updateCache("cache/" + step + "Cache.json", cache)
 
     def checkInPageNums(self, title):
         return self.PageNums and getChapterNo(title) in self.PageNums
@@ -195,7 +181,8 @@ class VoiceGenerator:
 
             if contents_to_process:
                 print(f"\nProcessing {len(contents_to_process)} page(s)")
-                spell_checked_paragraphs = stylize(self.model, self.tokenizer, contents_to_process, notebook_name, section_name,
+                spell_checked_paragraphs = stylize(self.model, self.tokenizer, contents_to_process, notebook_name,
+                                                   section_name,
                                                    self.VOICE_CACHE, self.getOutputPath())
                 self.sort()
                 if spell_checked_paragraphs == len(contents_to_process):
@@ -223,7 +210,8 @@ class VoiceGenerator:
             voice_cache = self.VOICE_CACHE[notebook_name][section_name]
             title_cache = self.TITLE_CACHE.setdefault(notebook_name, {}).setdefault(section_name, {})
             for page in pages:
-                if page['title'] in voice_cache and (page["title"] not in title_cache or self.checkInPageNums(page["title"])):
+                if page['title'] in voice_cache and (
+                        page["title"] not in title_cache or self.checkInPageNums(page["title"])):
                     contents_to_process.append({
                         "title": page["title"],
                         "content": voice_cache[page["title"]],
@@ -231,7 +219,8 @@ class VoiceGenerator:
 
             if contents_to_process:
                 print(f"Titles generation for {len(contents_to_process)} page(s)")
-                summarized_paragraphs = summarization(self.model, self.tokenizer, contents_to_process, notebook_name, section_name,
+                summarized_paragraphs = summarization(self.model, self.tokenizer, contents_to_process, notebook_name,
+                                                      section_name,
                                                       self.TITLE_CACHE, self.getOutputPath())
                 self.sort()
                 if summarized_paragraphs == len(contents_to_process):
@@ -250,7 +239,8 @@ class VoiceGenerator:
             nb_cache = self.EMOTION_CACHE.setdefault(notebook_name, {})
             sec_cache = nb_cache.setdefault(section_name, {})
             for page in pages:
-                if page['title'] in voice_cache and (page["title"] not in sec_cache or self.checkInPageNums(page["title"])):
+                if page['title'] in voice_cache and (
+                        page["title"] not in sec_cache or self.checkInPageNums(page["title"])):
                     contents_to_process.append(
                         {
                             "title": page["title"],
@@ -258,7 +248,8 @@ class VoiceGenerator:
                         })
             if contents_to_process:
                 print(f"\nNeed to detect emotions for {len(contents_to_process)} page(s).")
-                emotion_paragraphs = detectEmotions(self.model, self.tokenizer, contents_to_process, notebook_name, section_name,
+                emotion_paragraphs = detectEmotions(self.model, self.tokenizer, contents_to_process, notebook_name,
+                                                    section_name,
                                                     self.EMOTION_CACHE, self.getOutputPath())
 
                 create_backup('detection', self.EMOTION_CACHE)
@@ -310,7 +301,8 @@ class VoiceGenerator:
                         })
             if contents_to_process:
                 print(f"\nNeed to add emotions to {len(contents_to_process)} page(s).")
-                emotion_paragraphs = insertEmotions(self.model, self.tokenizer, contents_to_process, notebook_name, section_name,
+                emotion_paragraphs = insertEmotions(self.model, self.tokenizer, contents_to_process, notebook_name,
+                                                    section_name,
                                                     self.EMOTION_CACHE, self.getOutputPath())
 
                 create_backup('insertion', self.EMOTION_CACHE)

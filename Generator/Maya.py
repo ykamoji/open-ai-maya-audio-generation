@@ -1,5 +1,4 @@
 import os
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import torch
 import glob
 import time
@@ -15,14 +14,16 @@ from Generator.decoder import create_audio
 from Generator.utils import batch_sentences, getARModel, getSnacModel, getTokenizer
 
 
-def _suppress_cpp_warnings():
-    # redirect low-level C++ stderr to /dev/null
-    devnull = os.open(os.devnull, os.O_WRONLY)
-    os.dup2(devnull, 2)  # fd=2 → stderr
-    os.close(devnull)
+# def _suppress_cpp_warnings():
+#     # redirect low-level C++ stderr to /dev/null
+#     devnull = os.open(os.devnull, os.O_WRONLY)
+#     os.dup2(devnull, 2)  # fd=2 → stderr
+#     os.close(devnull)
+#
+#
+# def _mp_initializer():
+#     _suppress_cpp_warnings()
 
-def _mp_initializer():
-    _suppress_cpp_warnings()
 
 mp.set_start_method("spawn", force=True)
 
@@ -215,7 +216,8 @@ def singleProcess(model, snac_model, tokenizer, outputPath, para_breaks, tagged_
     for part, (inputs, is_tagged) in enumerate(tqdm(prompt_inputs, desc=f"{title}", ncols=90, position=1)):
         # print(chunk)
         # print(f"Voice generation for part {step}/{total} ...")
-        generated_ids, (generation_time, audio_duration, rtf, tps) = processVoice(model, tokenizer, inputs, is_tagged, part)
+        generated_ids, (generation_time, audio_duration, rtf, tps) = processVoice(model, tokenizer, inputs, is_tagged,
+                                                                                  part)
         np.save(audio_path + f"part_{step}.npy", generated_ids)
         del generated_ids
         # print(f"Voice generation for part {step} ({audio_duration:.2f} sec) in {generation_time:.2f} sec")
@@ -237,15 +239,15 @@ def singleProcess(model, snac_model, tokenizer, outputPath, para_breaks, tagged_
 
     writer.close()
 
-    part_files = _gather_sorted_part_files(outputPath+"/audios/", title)
+    part_files = _gather_sorted_part_files(outputPath + "/audios/", title)
 
     generated_tokens_full = [np.load(file) for file in part_files]
 
     create_audio(generated_tokens_full, snac_model, audio_path, para_breaks, tagged_list, title)
 
 
-def multiGPU(GPUCount, MODEL_NAME, CACHE_PATH, platform, snac_model, outputPath, para_breaks, tagged_list, prompt_inputs, title):
-
+def multiGPU(GPUCount, MODEL_NAME, CACHE_PATH, platform, snac_model, outputPath, para_breaks, tagged_list,
+             prompt_inputs, title):
     manager = mp.Manager()
     task_q = manager.Queue()
     metrics_q = manager.Queue()
@@ -289,7 +291,7 @@ def multiGPU(GPUCount, MODEL_NAME, CACHE_PATH, platform, snac_model, outputPath,
 
     # ---------- All AR parts are saved on disk now ----------
     # Gather and sort parts
-    part_files = _gather_sorted_part_files(outputPath+"/audios/", title)
+    part_files = _gather_sorted_part_files(outputPath + "/audios/", title)
 
     # Concatenate parts into one generated_ids object
     generated_tokens_full = [np.load(file) for file in part_files]
@@ -321,7 +323,6 @@ def multiGPU(GPUCount, MODEL_NAME, CACHE_PATH, platform, snac_model, outputPath,
 
 
 def gpu_worker(gpu_id, MODEL_NAME, CACHE_PATH, platform, task_q, metrics_q, outputPath):
-
     device = torch.device(f"cuda:{gpu_id}")
     torch.cuda.set_device(device)
 
@@ -377,7 +378,6 @@ def gpu_worker(gpu_id, MODEL_NAME, CACHE_PATH, platform, task_q, metrics_q, outp
 
 
 def _gather_sorted_part_files(parts_dir, title):
-
     files = [file for file in glob.glob(parts_dir + f"{title}/*.npy") if "part_" in file]
 
     def idx_from_name(p):
@@ -386,13 +386,12 @@ def _gather_sorted_part_files(parts_dir, title):
         try:
             return int(name.split("_")[1])
         except Exception:
-            return 10**9
+            return 10 ** 9
 
     return sorted(files, key=idx_from_name)
 
 
 def metric_worker(metrics_q, outputPath, title, done_event, total_parts, log_steps=5):
-
     writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
     input_lengths = []
     generation_times = []
