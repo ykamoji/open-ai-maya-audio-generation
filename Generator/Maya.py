@@ -94,7 +94,7 @@ def convert(Args, pages, outputPath):
 
     if GPUCount > 1:
         print("\nRunning in multi GPU env.")
-
+        mp.set_start_method("spawn", force=True)
         process_function = multiGPU
         args = {
             "GPUCount": GPUCount,
@@ -245,6 +245,7 @@ def singleProcess(model, snac_model, tokenizer, outputPath, para_breaks, tagged_
 
 def multiGPU(GPUCount, MODEL_NAME, CACHE_PATH, platform, snac_model, outputPath, para_breaks, tagged_list,
              prompt_inputs, title):
+
     task_q = mp.Queue()
     metrics_q = mp.Queue()
     done_event = mp.Event()
