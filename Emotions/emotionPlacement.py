@@ -148,7 +148,6 @@ def insert_emotion_index(title, sentences, tags, model, tokenizer, outputPath, B
                 placement_indexes.append("END")
 
         finally:
-            del decoded_batch
             del out_ids
             del gen_only
             del full_mask

@@ -239,7 +239,6 @@ def detect_batch(title, indices, sentences, model, tokenizer, outputPath, BATCH_
             print(f"Exception during detection: {e}. Model cannot detect emotions.")
             batch_outputs = [""] * len(chunk)
         finally:
-            del batch_outputs
             del out_ids
             del static_mask
             del full_mask
@@ -336,8 +335,6 @@ def tag_verification(model, tokenizer, sentences, BATCH_SIZE, verifications):
             print(f"Exception while verifying tags: {e}")
         finally:
             verified_outputs[idx] += invalid_tag
-
-    del batch_outputs
 
     return verified_outputs
 
