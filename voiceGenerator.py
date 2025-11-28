@@ -10,6 +10,9 @@ os.environ["XLA_FLAGS"] = "--xla_gpu_cuda_data_dir="
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+import absl.logging
+absl.logging.set_verbosity(absl.logging.ERROR)
+
 import glob
 import json
 import random
