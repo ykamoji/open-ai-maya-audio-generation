@@ -3,8 +3,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from snac import SNAC
 import re
 
-from Emotions.utils import getDevice
-
 pattern = r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<![A-Z]\.)(?<=\.)\s'
 
 
@@ -64,35 +62,37 @@ def convert_to_sentences(content):
     return [se for se in re.split(pattern, content) if se.strip()]
 
 
-def push_punctuation(line):
-    return f"{line[:-1]} {line[-1]}"
+pat = r"\s*(<[^>]+>)\s*"
 
 
-def batch_sentences(lines, limit=2):
-    paraBreak = "  "
-    lineBreak = " "
-    result = [push_punctuation(lines[0])+paraBreak]
+def batch_sentences(lines, limit=20):
+    result = [lines[0]]
+    para_breaks = [1]
     current = ""
     for line in lines[1:]:
         if line.strip() == "":
             if current:
-                result.append(f"{push_punctuation(current.strip())}{paraBreak}")
+                result.append(current.strip())
                 current = ""
-            else:
-                result[-1] += paraBreak
+            para_breaks.append(len(result))
             continue
 
         if len(current.split()) + len(line.split()) > limit:
             if current:
-                result.append(push_punctuation(current.strip()) + lineBreak)
+                result.append(current.strip())
             current = line
         else:
-            current = (current + lineBreak + line).strip() if current else line
+            current = (current + " " + line).strip() if current else line
 
     if current:
-        result.append(push_punctuation(current.strip()) + lineBreak)
+        result.append(current.strip())
 
-    return result
+    tagged_list = [
+        True if re.search(pat, result[i]) else False
+        for i in range(len(result))
+    ]
+
+    return result, tagged_list, para_breaks
 
 
 def paraChunks(paragraphs, limit):

@@ -1,4 +1,7 @@
 import os
+
+from auto_tone_equalize import process_npy
+
 # Suppress env warnings
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
@@ -329,7 +332,7 @@ class VoiceGenerator:
             sec_cache = nb_cache.setdefault(section_name, {})
             if not sec_cache:
                 raise Exception(f"You don't have any emotion lines to process for {notebook_name} {section_name}")
-            audio_chapters = [file for file in glob.glob(outputPath + "audios/*.wav") if "partial" not in file]
+            audio_chapters = [file for file in glob.glob(outputPath + "audios/*/*.npy") if "part" not in file]
             contents_to_process = []
             for page in pages:
                 if page["title"] not in audio_chapters or self.checkInPageNums(page["title"]):
@@ -346,9 +349,11 @@ class VoiceGenerator:
                     processed = mayaConvert(self.Args, contents_to_process, outputPath)
                 if len(contents_to_process) == processed:
                     print(f"Voice generation completed!")
+                    print(f"Audio files in {outputPath} !")
+                    for audio in audio_chapters:
+                        process_npy(audio, f"output/audios/audiobook_{getChapterNo(audio)}.wav")
                 else:
                     print(f"Something went wrong! Check the logs.")
-                print(f"Saved npy files in {outputPath} !")
             setFooter(step_name)
 
 

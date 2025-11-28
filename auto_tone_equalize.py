@@ -75,7 +75,7 @@ def process_npy(npy_path, output_wav):
     base = os.path.splitext(output_wav)[0]
 
     # save as wav (PCM 16)
-    raw_wav = f"{base}.wav"
+    raw_wav = f"{base}_v1.wav"
     sf.write(raw_wav, audio, samplerate=24000, subtype="PCM_24")
 
     speed = f"{base}_speed.wav"
@@ -110,7 +110,6 @@ def process_npy(npy_path, output_wav):
     final = f"{base}_v2.wav"
     run([FFMPEG, "-y", "-i", limited, "-ar", "48000", final])
 
-    # os.remove(raw_wav)
     os.remove(speed)
     os.remove(denoised)
     # os.remove(trimmed)
@@ -143,6 +142,6 @@ if __name__ == "__main__":
     audios = search_files(chapters, 'output/audios')
 
     for audio in audios:
-        process_npy(audio, "output/audios/audiobook.wav")
+        process_npy(audio, f"output/audios/audiobook_{getChapter(audio)}.wav")
 
 

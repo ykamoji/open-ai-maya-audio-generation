@@ -1,5 +1,6 @@
-import torch
 import os
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+import torch
 import glob
 import time
 import warnings
@@ -60,20 +61,8 @@ def getDescription(MayaArgs, title):
     for character in MayaArgs.Characters:
         if character.Name in title:
             description = character.Description
-    print(f"Description: {description}")
+    print(f"\nDescription: {description}")
     return description
-
-
-def delete_previous_outputs(outputPath, step):
-    files = glob.glob(outputPath + "/partial_*.wav")
-    files.sort(key=os.path.getmtime)
-    files_to_delete = files[:-2]
-    if files_to_delete and step > 0 and step % LOG_STEPS == 0:
-        for f in files_to_delete:
-            try:
-                os.remove(f)
-            except Exception as e:
-                pass
 
 
 def convert(Args, pages, outputPath):
@@ -82,7 +71,6 @@ def convert(Args, pages, outputPath):
     MODEL_NAME = MayaArgs.ModelName.__dict__[platform]
     CACHE_PATH = MayaArgs.CachePath.__dict__[platform]
 
-    snac_model = getSnacModel(CACHE_PATH)
     tokenizer = getTokenizer(MODEL_NAME, CACHE_PATH, platform)
 
     GPUCount = torch.cuda.device_count()
@@ -94,21 +82,16 @@ def convert(Args, pages, outputPath):
         torch.cuda.manual_seed_all(0)
 
     if GPUCount > 1:
-        print("Running in multi GPU env.")
-
-        def model_loaders(gpu_id):
-            return getARModel(MODEL_NAME, CACHE_PATH, platform, f"cuda:{gpu_id}")
-
-        def tokenizer_loader():
-            return getTokenizer(MODEL_NAME, CACHE_PATH, platform)
+        print("\nRunning in multi GPU env.")
 
         process_function = multiGPU
         args = {
             "GPUCount": GPUCount,
-            "model_loaders": model_loaders,
-            "tokenizer_loader": tokenizer_loader,
+            "MODEL_NAME": MODEL_NAME,
+            "CACHE_PATH": CACHE_PATH,
+            "platform": platform,
             "outputPath": outputPath,
-            "snac_model": getSnacModel,
+            "snac_model": getSnacModel(CACHE_PATH),
         }
     else:
         print("Running in CPU or single GPU env.")
@@ -116,20 +99,35 @@ def convert(Args, pages, outputPath):
         args = {
             "model": getARModel(MODEL_NAME, CACHE_PATH, platform),
             "tokenizer": tokenizer,
-            "snac_model": snac_model,
+            "snac_model": getSnacModel(CACHE_PATH),
             "outputPath": outputPath,
         }
 
     processed = 0
     for page in tqdm(pages, desc="Pages", ncols=120, position=0):
         try:
-            chunks = batch_sentences(page['content'])
+            chunks, tagged_list, para_breaks = batch_sentences(page['content'])
+
+            # br = 0
+            # for l, chunk in enumerate(chunks):
+            #     if br < len(para_breaks) and l == para_breaks[br]:
+            #         print("------Para break-------")
+            #         br += 1
+            #     print(chunk + f" Tagged: {tagged_list[l]}" )
+            #
+            # exit(1)
+
             description = getDescription(MayaArgs, page['title'])
             prompt_inputs = [
-                tokenizer(build_prompt(tokenizer, description, chunk), return_tensors="pt")
-                for chunk in chunks
+                (tokenizer(build_prompt(tokenizer, description, chunks[i]), return_tensors="pt"), tagged_list[i])
+                for i in range(len(chunks))
             ]
-            process_function(**args, prompt_inputs=prompt_inputs, title=page['title'])
+
+            process_function(**args,
+                             para_breaks=para_breaks,
+                             tagged_list=tagged_list,
+                             prompt_inputs=prompt_inputs,
+                             title=page['title'])
             processed += 1
         except Exception as e:
             print(f"Exception: {e}. Skipping {page['title']}")
@@ -148,7 +146,7 @@ def estimate_tokens(tok_len):
         return tok_len * 18 + 120
 
 
-def processVoice(model, tokenizer, inputs, part):
+def processVoice(model, tokenizer, inputs, is_tagged, part):
     try:
         max_new_tokens = estimate_tokens(len(inputs['input_ids'][0]))
         start_time = time.time()
@@ -156,23 +154,24 @@ def processVoice(model, tokenizer, inputs, part):
             with torch.inference_mode():
                 outputs = model.generate(
                     **inputs.to(model.device),
-                    max_new_tokens=max_new_tokens,
+                    max_new_tokens=2048,
                     min_new_tokens=28,  # At least 4 SNAC frames
-                    temperature=0.4,
-                    top_p=0.9,
-                    repetition_penalty=1.1,  # Prevent loops
+                    temperature=0.35 if is_tagged else 0.25,
+                    top_p=0.92 if is_tagged else 0.8,
+                    repetition_penalty=1.05 if is_tagged else 1.0,
                     do_sample=True,
                     eos_token_id=CODE_END_TOKEN_ID,  # Stop at end of speech token
                     pad_token_id=tokenizer.pad_token_id,
                     use_cache=True,
                 )
-            generated_tokens = outputs[0, inputs['input_ids'].shape[1]:].detach().cpu().tolist()
+            generated_tokens = outputs[0, inputs['input_ids'].shape[1]:].tolist()
             if CODE_END_TOKEN_ID not in generated_tokens:
-                # eos_position = generated_ids.index(CODE_END_TOKEN_ID)
-                # print(f"Part {part} EOS token found at position {eos_position}/{len(generated_ids)}")
-                max_new_tokens += 500
+                max_new_tokens += 200
                 print(f"\nPart {part}. EOS token not found. Trying again with {max_new_tokens}")
+                del generated_tokens
             else:
+                eos_position = generated_tokens.index(CODE_END_TOKEN_ID)
+                print(f"Part {part} EOS token found at position {eos_position}/{len(generated_tokens)} for {len(inputs['input_ids'][0])}")
                 break
 
         generation_time = time.time() - start_time
@@ -190,7 +189,7 @@ def processVoice(model, tokenizer, inputs, part):
     return generated_tokens, (generation_time, audio_duration, rtf, tps)
 
 
-def singleProcess(prompt_inputs, model, snac_model, tokenizer, outputPath, title):
+def singleProcess(model, snac_model, tokenizer, outputPath, para_breaks, tagged_list, prompt_inputs, title):
     input_lengths = []
     generation_times = []
     writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
@@ -198,12 +197,12 @@ def singleProcess(prompt_inputs, model, snac_model, tokenizer, outputPath, title
     model = model.to(getDevice())
     snac_model = snac_model.to(getDevice())
     audio_path = outputPath + f"audios/{title}/"
-    generated_outputs = []
-    for part, inputs in enumerate(tqdm(prompt_inputs, desc="Generating audio", ncols=90, position=1)):
+    for part, (inputs, is_tagged) in enumerate(tqdm(prompt_inputs, desc=f"{title}", ncols=90, position=1)):
         # print(chunk)
         # print(f"Voice generation for part {step}/{total} ...")
-        generated_ids, (generation_time, audio_duration, rtf, tps) = processVoice(model, tokenizer, inputs, part)
-        generated_outputs.append(generated_ids)
+        generated_ids, (generation_time, audio_duration, rtf, tps) = processVoice(model, tokenizer, inputs, is_tagged, part)
+        np.save(generated_ids, audio_path + f"part_{step}")
+        del generated_ids
         # print(f"Voice generation for part {step} ({audio_duration:.2f} sec) in {generation_time:.2f} sec")
         input_length = len(inputs['input_ids'][0])
         input_lengths.append(input_length)
@@ -219,16 +218,23 @@ def singleProcess(prompt_inputs, model, snac_model, tokenizer, outputPath, title
                 correlation = np.corrcoef(input_lengths, generation_times)[0, 1]
                 writer.add_scalar("Performance/InputDurationCorr", correlation, step)
 
-            if step % (LOG_STEPS * 2) == 0:
-                delete_previous_outputs(audio_path, step)
-                create_audio(generated_outputs, snac_model, audio_path, f"partial_{step}")
+            # if step % (LOG_STEPS * 2) == 0:
+                # delete_previous_outputs(audio_path, step)
+                # create_audio(generated_outputs, snac_model, audio_path, f"partial_{step}")
 
     writer.close()
 
-    create_audio(generated_outputs, snac_model, audio_path, title)
+    part_files = _gather_sorted_part_files(audio_path, title)
+
+    generated_tokens_full = [np.load(file) for file in part_files]
+
+    create_audio(generated_tokens_full, snac_model, audio_path, para_breaks, tagged_list, title)
 
 
-def multiGPU(GPUCount, model_loaders, snac_model, tokenizer_loader, outputPath, prompt_inputs, title):
+def multiGPU(GPUCount, MODEL_NAME, CACHE_PATH, platform, snac_model, outputPath, para_breaks, tagged_list, prompt_inputs, title):
+
+    mp.set_start_method("spawn", force=True)
+
     manager = mp.Manager()
     task_q = manager.Queue()
     metrics_q = manager.Queue()
@@ -257,7 +263,7 @@ def multiGPU(GPUCount, model_loaders, snac_model, tokenizer_loader, outputPath, 
     for gpu_id in range(GPUCount):
         p = mp.Process(
             target=gpu_worker,
-            args=(gpu_id, model_loaders, tokenizer_loader, task_q, metrics_q, audio_path),
+            args=(gpu_id, MODEL_NAME, CACHE_PATH, platform, task_q, metrics_q, audio_path),
         )
         p.start()
         procs.append(p)
@@ -283,7 +289,7 @@ def multiGPU(GPUCount, model_loaders, snac_model, tokenizer_loader, outputPath, 
     for p in snac_model.parameters():
         p.requires_grad = False
 
-    completed = create_audio(generated_tokens_full, snac_model, audio_path, title)
+    completed = create_audio(generated_tokens_full, snac_model, audio_path, para_breaks, tagged_list, title)
 
     # cleanup
     try:
@@ -303,13 +309,13 @@ def multiGPU(GPUCount, model_loaders, snac_model, tokenizer_loader, outputPath, 
     clear_cache()
 
 
-def gpu_worker(gpu_id, model_loader_fn, tokenizer_loader_fn, task_q, metrics_q, outputPath):
+def gpu_worker(gpu_id, MODEL_NAME, CACHE_PATH, platform, task_q, metrics_q, outputPath):
 
     device = torch.device(f"cuda:{gpu_id}")
     torch.cuda.set_device(device)
 
-    model = model_loader_fn(gpu_id)
-    tokenizer = tokenizer_loader_fn()
+    model = getARModel(MODEL_NAME, CACHE_PATH, platform, f"cuda:{gpu_id}")
+    tokenizer = getTokenizer(MODEL_NAME, CACHE_PATH, platform)
 
     model.eval()
     for p in model.parameters():
@@ -328,10 +334,10 @@ def gpu_worker(gpu_id, model_loader_fn, tokenizer_loader_fn, task_q, metrics_q, 
         item = task_q.get()
         if item is None:
             break
-        idx, inputs = item
+        idx, (inputs, is_tagged) = item
         try:
 
-            generated_tokens, meta = processVoice(model, tokenizer, inputs, idx)
+            generated_tokens, meta = processVoice(model, tokenizer, inputs, is_tagged, idx)
 
             np.save(outputPath + f"part_{idx}.npy", generated_tokens)
 
