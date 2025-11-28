@@ -42,7 +42,7 @@ class VoiceGenerator:
 
         parser = argparse.ArgumentParser(description="Generation")
         parser.add_argument("--config", type=str, default="Default", help="Configuration file")
-        parser.add_argument("--pageLimit", type=json.loads, default=[0,-1], help="PageLimit")
+        parser.add_argument("--pageLimit", type=json.loads, default=[None, None], help="PageLimit")
         parser.add_argument("--pageNums", type=json.loads, default=None, help="List of Page Numbers to run")
         parser.add_argument("--steps", type=json.loads, default=[0], help="Step definition")
         args = parser.parse_args()
@@ -156,11 +156,8 @@ class VoiceGenerator:
 
         pages = self.load_content()
 
-        start = None
-        end = None
-        if self.Args.Generator.PageLimit:
-            start = self.Args.Generator.PageLimit[0]
-            end = self.Args.Generator.PageLimit[1]
+        start = self.Args.Generator.PageLimit[0]
+        end = self.Args.Generator.PageLimit[1]
 
         pages = pages[start:end]
 
