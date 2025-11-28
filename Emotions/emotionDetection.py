@@ -379,6 +379,7 @@ def detectEmotions(model, tokenizer, pages, notebook_name, section_name, EMOTION
         except Exception as e:
             print(f"Exception: {e}. Skipping {page['title']}.")
 
+    global DETECTION_STATIC_MASK, DETECTION_STATIC_BATCH_PAST, VERIFICATION_STATIC_MASK, VERIFICATION_STATIC_BATCH_PAST
     del DETECTION_STATIC_MASK
     del DETECTION_STATIC_BATCH_PAST
     del VERIFICATION_STATIC_MASK
