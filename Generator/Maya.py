@@ -11,7 +11,7 @@ from tqdm import tqdm
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
 from Emotions.utils import getDevice, clear_cache
-from Generator.decoder import save_snac_tokens
+from Generator.Decoder import save_snac_tokens
 from Generator.utils import batch_sentences, getARModel, getTokenizer
 
 warnings.filterwarnings("ignore")
@@ -225,7 +225,21 @@ def singleProcess(model, tokenizer, outputPath, para_breaks, tagged_list, prompt
 
     generated_tokens_full = [np.load(file) for file in part_files]
 
-    save_snac_tokens(generated_tokens_full, audio_path, para_breaks, tagged_list, title)
+    completed = save_snac_tokens(generated_tokens_full, audio_path, para_breaks, tagged_list, title)
+
+    # cleanup
+    try:
+        del generated_tokens_full
+        torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+    if completed:
+        for file in part_files:
+            try:
+                os.remove(file)
+            except Exception:
+                pass
 
 
 def multiGPU(GPUCount, MODEL_NAME, CACHE_PATH, platform, outputPath, para_breaks, tagged_list,
@@ -293,8 +307,6 @@ def multiGPU(GPUCount, MODEL_NAME, CACHE_PATH, platform, outputPath, para_breaks
                 os.remove(file)
             except Exception:
                 pass
-
-    clear_cache()
 
 
 def gpu_worker(gpu_id, MODEL_NAME, CACHE_PATH, platform, task_q, metrics_q, outputPath):

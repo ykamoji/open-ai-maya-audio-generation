@@ -10,7 +10,6 @@ import glob
 # CONFIG
 # ================================
 
-TEMPO = 1.25
 DENOISE_STR = "anlmdn=s=6:p=0.0018"
 EQ_STR = (
     # "highpass=f=80,"
@@ -50,7 +49,7 @@ def run(cmd):
 # ================================
 # MAIN FUNCTION
 # ================================
-def process_npy(input_path, output_wav):
+def process_npy(input_path, output_wav, tempo=1.15):
     # load float32 waveform
     print("Loading .npy...")
     audio = np.load(input_path).astype(np.float32)
@@ -63,7 +62,7 @@ def process_npy(input_path, output_wav):
 
     speed = f"{base}_speed.wav"
     # SPEED UP (tempo only, pitch preserved)
-    run([FFMPEG, "-y", "-i", raw_wav, "-filter:a", f"atempo={TEMPO}", speed])
+    run([FFMPEG, "-y", "-i", raw_wav, "-filter:a", f"atempo={tempo}", speed])
 
     # Gentle silence reduction (ACX standard)
     trimmed = f"{base}_trimmed.wav"
@@ -90,7 +89,7 @@ def process_npy(input_path, output_wav):
         limited
     ])
 
-    final = f"{base}_v2.wav"
+    final = f"{base}.wav"
     run([FFMPEG, "-y", "-i", limited, "-ar", "48000", final])
 
     os.remove(raw_wav)

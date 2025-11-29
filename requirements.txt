@@ -9,3 +9,4 @@ numpy
 tensorboard
 llama-cpp-python
 pyloudnorm
+srt

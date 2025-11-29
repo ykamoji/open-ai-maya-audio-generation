@@ -1,5 +1,8 @@
 import torch
 import os
+import json
+import srt
+from datetime import timedelta
 import sys
 import numpy as np
 import glob
@@ -7,8 +10,8 @@ import argparse
 from tqdm import tqdm
 from pathlib import Path
 from Emotions.utils import clear_cache, getDevice
-from Generator.utils import getSnacModel
-from auto_tone_equalize import process_npy, getChapter
+from Generator.utils import getSnacModel, batch_sentences
+from auto_tone_equalize import process_npy
 
 CODE_END_TOKEN_ID = 128258
 CODE_TOKEN_OFFSET = 128266
@@ -142,12 +145,12 @@ def assemble_snac_segments_and_stitch(
 
     for i, part_codes in enumerate(snac_codes_per_chunk):
         if part_codes:
-            final_codes.append(part_codes)
+            final_codes.append(("speech", part_codes))
 
         # Add codec-consistent silence frames
         if i < num_chunks - 1:
             silence_tokens = generate_true_silence(silence_schedule[i], silence_frame, samples_per_frame)
-            final_codes.append(silence_tokens)
+            final_codes.append(("silence", silence_tokens))
 
     return final_codes
 
@@ -172,10 +175,47 @@ def save_snac_tokens(generated_outputs, audio_path, para_breaks, tagged_list, ti
                 nxt += 1
 
     except Exception as e:
-        print(f"Saving meta file error: {e}")
+        print(f"Saving snac tokens meta data error: {e}")
         completed = False
 
     return completed
+
+
+def getDialogues(title):
+
+    with open("cache/emotionCache.json") as f:
+        data = json.load(f)
+
+    lines = []
+    for notebook in data:
+        for section in data[notebook]:
+            for page in data[notebook][section]:
+                if title in page:
+                    lines = data[notebook][section][page]
+                    break
+
+    audio_lines, _, _ = batch_sentences(lines)
+    return audio_lines
+
+
+
+def write_srt(sentences, timeline, out_path):
+
+    subtitles = []
+    for idx, ((start, end), text) in enumerate(zip(timeline, sentences), start=1):
+        subtitles.append(
+            srt.Subtitle(
+                index=idx,
+                start=timedelta(seconds=start),
+                end=timedelta(seconds=end),
+                content=text.strip()
+            )
+        )
+
+    srt_output = srt.compose(subtitles)
+
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(srt_output)
 
 
 def decode(device, generated_outputs, snac_model, audio_path, para_breaks, tagged_list, title):
@@ -187,25 +227,62 @@ def decode(device, generated_outputs, snac_model, audio_path, para_breaks, tagge
         # true frame size
         samples_per_frame = 2048
 
-        audio_frames = []
-        for gen_out in tqdm(generated_outputs, desc=f"Normal", ncols=100, file=sys.stdout):
-            audio_frames.extend(decode_audio(extract_snac_codes(gen_out), snac_model, device))
+        # audio_frames = []
+        # for gen_out in tqdm(generated_outputs, desc=f"Normal", ncols=100, file=sys.stdout):
+        #     audio_frames.extend(decode_audio(extract_snac_codes(gen_out), snac_model, device))
+        #
+        # saveAudio(audio_path, audio_frames, title + '_n')
+        # process_npy(input_path=os.path.join(audio_path, f"{title + '_n'}.npy"),
+        #             output_wav=os.path.join(audio_path, f"audiobook_{getChapter(title)}_n.npy"))
 
-        saveAudio(audio_path, audio_frames, title + '_n')
-        process_npy(input_path=os.path.join(audio_path, f"{title + '_n'}.npy"),
-                    output_wav=os.path.join(audio_path, f"audiobook_{getChapter(title)}_n.npy"))
+        lines = getDialogues(title)
 
         final_codes = assemble_snac_segments_and_stitch(generated_outputs, silence_frame, samples_per_frame,
                                                         para_breaks, tagged_list)
         audio_frames = []
-        for gen_out in tqdm(final_codes, desc=f"Modified", ncols=100, file=sys.stdout):
-            audio_frames.extend(decode_audio(gen_out, snac_model, device))
+        saved_decoded_audio = []
+        decoded_audio_available = True
+        if os.path.isfile(os.path.join(audio_path, f"{title}_decoded.npy")):
+            saved_decoded_audio = np.load(os.path.join(audio_path, f"{title}_decoded.npy"), allow_pickle=True).tolist()
+        else:
+            decoded_audio_available = False
 
-        saveAudio(audio_path, audio_frames, title + '_m')
+        timeline = []
+        t = 0.0
+        i = 0
+        for (type, gen_out) in tqdm(final_codes, desc=f"{title}", ncols=100, file=sys.stdout):
+            if decoded_audio_available:
+                decoded = saved_decoded_audio[i]
+            else:
+                decoded = decode_audio(gen_out, snac_model, device)
+            i += 1
 
-        process_npy(input_path=os.path.join(audio_path, f"{title + '_m'}.npy"),
-                    output_wav=os.path.join(audio_path, f"audiobook_{getChapter(title)}_m.npy"))
+            duration = len(decoded) / SAMPLING_RATE
 
+            if type == 'speech':
+                start = t
+                end = start + duration
+                timeline.append((start, end))
+
+            t += duration
+
+            audio_frames.extend(decoded)
+            if not decoded_audio_available:
+                saved_decoded_audio.append(decoded)
+
+        if not decoded_audio_available:
+            np.save(os.path.join(audio_path, f"{title}_decoded.npy"), np.array(saved_decoded_audio, dtype=object))
+
+        saveAudio(audio_path, audio_frames, title)
+
+        speed_factor = 1.15
+        process_npy(input_path=os.path.join(audio_path, f"{title}.npy"),
+                    output_wav=os.path.join(audio_path, f"{title}.wav"),
+                    tempo=speed_factor)
+
+        timeline = [(s / speed_factor, e / speed_factor) for (s, e) in timeline]
+
+        write_srt(lines, timeline, os.path.join(audio_path, f"{title}.srt"))
 
     except Exception as e:
         print(f"Decoding error: {e}")
@@ -218,7 +295,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="Decoding")
     parser.add_argument("--path", type=str, default="/output", help="Audio Output Path")
-    parser.add_argument("--modelPath", type=str, default="/output", help="Snac Model Path")
+    parser.add_argument("--modelPath", type=str, default="/models", help="Snac Model Path")
     args = parser.parse_args()
 
     path = args.path
@@ -232,7 +309,7 @@ if __name__ == '__main__':
 
     files = [file for file in glob.glob(os.path.join(path, f"audios/*/*.npy")) if "_meta" in file]
 
-    snac_model = getSnacModel("models/")
+    snac_model = getSnacModel(model_path)
     device = 'cuda:0' if torch.cuda.is_available() else getDevice()
     snac_model.to(device)
 
