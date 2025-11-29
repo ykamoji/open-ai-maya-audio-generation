@@ -70,6 +70,8 @@ def batch_sentences(lines, limit=20):
     para_breaks = []
     current_tokens = []
 
+    lines.insert(1, "") # for para break on the title
+
     def flush_current():
         if not current_tokens:
             return False
