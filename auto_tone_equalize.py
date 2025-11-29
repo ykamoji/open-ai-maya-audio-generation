@@ -10,7 +10,7 @@ import glob
 # CONFIG
 # ================================
 
-TEMPO = 1.35
+TEMPO = 1.25
 DENOISE_STR = "anlmdn=s=6:p=0.0018"
 EQ_STR = (
     # "highpass=f=80,"
@@ -38,39 +38,22 @@ RUBBERBAND = "rubberband-r3"
 # HELPER TO RUN COMMANDS
 # ================================
 
+
 def run(cmd):
     print(">", " ".join(cmd))
-    subprocess.run(cmd, check=True)
-
-
-def ffmpeg_filter(input_wav, output_wav, filters):
-    cmd = [
-        FFMPEG, "-y",
-        "-i", input_wav,
-        "-af", filters,
-        output_wav
-    ]
-    run(cmd)
-
-
-def ffmpeg_resample(input_wav, output_wav, sr):
-    cmd = [
-        FFMPEG, "-y",
-        "-i", input_wav,
-        "-ar", str(sr),
-        # "-af", "aresample=resampler=soxr",
-        output_wav
-    ]
-    run(cmd)
+    subprocess.run(cmd,
+                   stdout=subprocess.DEVNULL,
+                   stderr=subprocess.DEVNULL,
+                   check=True)
 
 
 # ================================
 # MAIN FUNCTION
 # ================================
-def process_npy(npy_path, output_wav):
+def process_npy(input_path, output_wav):
     # load float32 waveform
     print("Loading .npy...")
-    audio = np.load(npy_path).astype(np.float32)
+    audio = np.load(input_path).astype(np.float32)
 
     base = os.path.splitext(output_wav)[0]
 
@@ -110,6 +93,7 @@ def process_npy(npy_path, output_wav):
     final = f"{base}_v2.wav"
     run([FFMPEG, "-y", "-i", limited, "-ar", "48000", final])
 
+    os.remove(raw_wav)
     os.remove(speed)
     os.remove(denoised)
     # os.remove(trimmed)
@@ -130,7 +114,7 @@ def search_files(chapters, inputPath):
         number = getChapter(file)
         if number:
             number = int(number)
-        if number in chapters : #and "part" not in file:
+        if number in chapters and "_meta" not in file:
             audios.append(file)
         # audios.append(file)
     return audios
@@ -142,7 +126,7 @@ if __name__ == "__main__":
     audios = search_files(chapters, 'output/audios')
     audios.sort(key=lambda x: int(getChapter(x)))
 
-    audios = audios[:1]
+    audios = audios[1:]
     for audio in audios:
         process_npy(audio, f"output/audios/audiobook_{getChapter(audio)}.wav")
 

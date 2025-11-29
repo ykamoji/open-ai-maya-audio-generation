@@ -79,20 +79,29 @@ class VoiceGenerator:
             })
         return data
 
-    def add_title(self, notebook_name, section_name, title):
+    def add_title(self, pages, notebook_name, section_name, title):
+
         number = re.search(r"(?i)\bchat?pter\s*#?\s*(\d+)", title).group(1)
+
+        if not re.search(r"Chapter\s+\d+,\s*(.+)", pages[0]).group(1).strip():
+            pages.pop(0)
+        else:
+            pages[0].replace(" ", "")
+            return
+
         titles = self.TITLE_CACHE.get(notebook_name, {}).get(section_name, {}).get(title, {})
-        title = ""
-        if "best" in titles:
-            title = titles["best"]
+        chapter_title = ""
+        if "best" in titles and titles["best"].strip():
+            chapter_title = titles["best"]
         elif "suggestions" in titles:
-            title = random.choice(titles["suggestions"])
+            chapter_title = random.choice(titles["suggestions"])
 
-        if title:
-            if not title.endswith('.'):
-                title += '.'
+        if chapter_title:
+            if not chapter_title.endswith('.'):
+                chapter_title += '.'
 
-        return f"Chapter {number}, " + (f" {title}" if title else "")
+        chapter_title = f"Chapter {number}" + (f", {chapter_title}" if chapter_title else "")
+        pages.insert(0, chapter_title)
 
     def check_detection_emotion_post_process(self, title):
         lines = self.EMOTION_CACHE[self.Args.Graph.NotebookName][self.Args.Graph.SectionName][title]
@@ -320,7 +329,7 @@ class VoiceGenerator:
             for page in pages:
                 if self.check_insertion_emotion_post_process(page["title"]) or self.checkInPageNums(page["title"]):
                     sec_cache[page["title"]] = emotion_inst_post_process(emotion_cache[page["title"]], page["title"])
-                    sec_cache[page["title"]].insert(0, self.add_title(notebook_name, section_name, page["title"]))
+                    self.add_title(sec_cache[page["title"]], notebook_name, section_name, page["title"])
             updateCache("cache/emotionCache.json", self.EMOTION_CACHE)
             self.sort()
             print(f"Post processing Emotions (Insertion) completed.")

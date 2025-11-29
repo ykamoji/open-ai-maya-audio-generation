@@ -29,6 +29,10 @@ snac
 
 #### Voice Generation Args
 ```
-./start.sh --config Kaggle --pageNums "[15]" --genPgL "[0,None]" --step "[0]"
+./start.sh --config Kaggle --pageNums "[15, 54, 67]" --genPgL "[0,None]" --step "[1,2,3,4,5,6,7,8]"
 ```
 
+#### Voice Decoding Args
+```
+!python3 -m Generator.decoder --path output/ --modelPath models/
+```

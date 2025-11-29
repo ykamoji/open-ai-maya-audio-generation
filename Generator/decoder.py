@@ -1,9 +1,14 @@
 import torch
 import os
+import sys
 import numpy as np
+import glob
+import argparse
+from tqdm import tqdm
 from pathlib import Path
-from Emotions.utils import clear_cache
+from Emotions.utils import clear_cache, getDevice
 from Generator.utils import getSnacModel
+from auto_tone_equalize import process_npy, getChapter
 
 CODE_END_TOKEN_ID = 128258
 CODE_TOKEN_OFFSET = 128266
@@ -92,11 +97,6 @@ def decode_audio(generated_snac_tokens, snac_model, device):
     return audio.astype(np.float32)
 
 
-def measure_samples_per_frame(snac_model, silence_frame, device):
-    one_frame_audio = decode_audio(silence_frame, snac_model, device)
-    return len(one_frame_audio)
-
-
 # --- Main assembler ---
 def assemble_snac_segments_and_stitch(
         generated_parts_tokens,        # list of token sequences per chunk
@@ -104,9 +104,9 @@ def assemble_snac_segments_and_stitch(
         samples_per_frame,
         para_break_indices=None,       # NEW: list of chunk indices where paragraph breaks occur
         tagged_list=None,               # NEW: list[bool], same length as generated_parts_tokens
-        silence_between_chunks=0.25,   # default normal silence
-        tagged_silence=0.30,           # silence after tagged lines
-        paragraph_silence=0.50,        # silence after paragraph break
+        silence_between_chunks=0.20,   # default normal silence
+        tagged_silence=0.32,           # silence after tagged lines
+        paragraph_silence=0.60,        # silence after paragraph break
 ):
     """
     Assemble SNAC segments and add silence between chunks with paragraph logic.
@@ -142,62 +142,121 @@ def assemble_snac_segments_and_stitch(
 
     for i, part_codes in enumerate(snac_codes_per_chunk):
         if part_codes:
-            final_codes.extend(part_codes)
+            final_codes.append(part_codes)
 
         # Add codec-consistent silence frames
         if i < num_chunks - 1:
             silence_tokens = generate_true_silence(silence_schedule[i], silence_frame, samples_per_frame)
-            final_codes.extend(silence_tokens)
+            final_codes.append(silence_tokens)
 
     return final_codes
 
 
-def create_audio(generated_outputs, snac_model, audio_path, para_breaks, tagged_list, title):
+def save_snac_tokens(generated_outputs, audio_path, para_breaks, tagged_list, title):
     completed = True
     try:
-
-        device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
         data = {
             "chunks": generated_outputs,
             "para_breaks": para_breaks,
             "tagged_list": tagged_list,
         }
-
         Path(audio_path).mkdir(parents=True, exist_ok=True)
         if not os.path.isfile(os.path.join(audio_path, f"{title}_meta.npy")):
             np.save(os.path.join(audio_path, f"{title}_meta.npy"), data)
+        else:
+            nxt = 1
+            while True:
+                if not os.path.isfile(os.path.join(audio_path, f"{title}_{nxt}_meta.npy")):
+                    np.save(os.path.join(audio_path, f"{title}_meta_{nxt}.npy"), data)
+                    break
+                nxt += 1
 
+    except Exception as e:
+        print(f"Saving meta file error: {e}")
+        completed = False
+
+    return completed
+
+
+def decode(device, generated_outputs, snac_model, audio_path, para_breaks, tagged_list, title):
+    completed = True
+    try:
         # learn silence frame
         silence_frame = [130334, 130002, 131688, 131688, 130002, 131688, 131688]
 
         # true frame size
         samples_per_frame = 2048
 
-        stream = []
-        for gen_out in generated_outputs:
-            stream.extend(extract_snac_codes(gen_out))
-        audio_frames = decode_audio(stream, snac_model, device)
-        saveAudio(audio_path, audio_frames, title+'_normal')
-        final_codes = assemble_snac_segments_and_stitch(generated_outputs, silence_frame, samples_per_frame, para_breaks, tagged_list)
-        audio_frames = decode_audio(final_codes, snac_model, device)
-        saveAudio(audio_path, audio_frames, title+'_stitch')
+        audio_frames = []
+        for gen_out in tqdm(generated_outputs, desc=f"Normal", ncols=100, file=sys.stdout):
+            audio_frames.extend(decode_audio(extract_snac_codes(gen_out), snac_model, device))
+
+        saveAudio(audio_path, audio_frames, title + '_n')
+        process_npy(input_path=os.path.join(audio_path, f"{title + '_n'}.npy"),
+                    output_wav=os.path.join(audio_path, f"audiobook_{getChapter(title)}_n.npy"))
+
+        final_codes = assemble_snac_segments_and_stitch(generated_outputs, silence_frame, samples_per_frame,
+                                                        para_breaks, tagged_list)
+        audio_frames = []
+        for gen_out in tqdm(final_codes, desc=f"Modified", ncols=100, file=sys.stdout):
+            audio_frames.extend(decode_audio(gen_out, snac_model, device))
+
+        saveAudio(audio_path, audio_frames, title + '_m')
+
+        process_npy(input_path=os.path.join(audio_path, f"{title + '_m'}.npy"),
+                    output_wav=os.path.join(audio_path, f"audiobook_{getChapter(title)}_m.npy"))
+
+
     except Exception as e:
-        print(f"Snac model Decoding error: {e}")
+        print(f"Decoding error: {e}")
         completed = False
 
     return completed
 
 
 if __name__ == '__main__':
-    title = "David (Chapter 15)"
-    audio_path = f"output/audios/{title}"
-    data = np.load(os.path.join(audio_path, f"{title}_meta.npy"), allow_pickle=True)
-    data = data.item()
-    generated_outputs = data["chunks"]
-    para_breaks = data["para_breaks"]
-    tagged_list = data["tagged_list"]
+
+    parser = argparse.ArgumentParser(description="Decoding")
+    parser.add_argument("--path", type=str, default="/output", help="Audio Output Path")
+    parser.add_argument("--modelPath", type=str, default="/output", help="Snac Model Path")
+    args = parser.parse_args()
+
+    path = args.path
+    model_path = args.modelPath
+
+    if not os.path.isdir(path):
+        raise Exception(f"{path} is not a directory. Check and give correct path.")
+
+    if not os.path.isdir(model_path):
+        raise Exception(f"{model_path} is not a directory. Check and give correct path.")
+
+    files = [file for file in glob.glob(os.path.join(path, f"audios/*/*.npy")) if "_meta" in file]
 
     snac_model = getSnacModel("models/")
-    # snac_model.to(getDevice())
+    device = 'cuda:0' if torch.cuda.is_available() else getDevice()
+    snac_model.to(device)
 
-    create_audio(generated_outputs, snac_model=snac_model, audio_path=audio_path, para_breaks=para_breaks, tagged_list=tagged_list, title=title)
+    for file in files:
+        title = os.path.split(file)[-1].split("_")[0]
+        audio_path = os.path.split(file)[-2]
+        data = np.load(file, allow_pickle=True)
+        data = data.item()
+        generated_outputs = data["chunks"]
+        para_breaks = data["para_breaks"]
+        tagged_list = data["tagged_list"]
+        completed = decode(device=device,
+                           generated_outputs=generated_outputs,
+                           snac_model=snac_model,
+                           audio_path=audio_path,
+                           para_breaks=para_breaks,
+                           tagged_list=tagged_list,
+                           title=title)
+        if completed:
+            print(f"Decoding completed for {title} !")
+
+        else:
+            print(f"Error for {title}. Check error logs.")
+
+
+
+

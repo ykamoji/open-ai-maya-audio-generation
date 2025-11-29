@@ -11,8 +11,8 @@ from tqdm import tqdm
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
 from Emotions.utils import getDevice, clear_cache
-from Generator.decoder import create_audio
-from Generator.utils import batch_sentences, getARModel, getSnacModel, getTokenizer
+from Generator.decoder import save_snac_tokens
+from Generator.utils import batch_sentences, getARModel, getTokenizer
 
 warnings.filterwarnings("ignore")
 
@@ -92,7 +92,6 @@ def convert(Args, pages, outputPath):
             "CACHE_PATH": CACHE_PATH,
             "platform": platform,
             "outputPath": outputPath,
-            "snac_model": getSnacModel(CACHE_PATH),
         }
     else:
         print("Running in CPU or single GPU env.")
@@ -100,7 +99,6 @@ def convert(Args, pages, outputPath):
         args = {
             "model": getARModel(MODEL_NAME, CACHE_PATH, platform),
             "tokenizer": tokenizer,
-            "snac_model": getSnacModel(CACHE_PATH),
             "outputPath": outputPath,
         }
 
@@ -191,13 +189,12 @@ def processVoice(model, tokenizer, inputs, is_tagged, part):
     return generated_tokens, (generation_time, audio_duration, rtf, tps)
 
 
-def singleProcess(model, snac_model, tokenizer, outputPath, para_breaks, tagged_list, prompt_inputs, title):
+def singleProcess(model, tokenizer, outputPath, para_breaks, tagged_list, prompt_inputs, title):
     input_lengths = []
     generation_times = []
     writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
     step = 0
     model = model.to(getDevice())
-    snac_model = snac_model.to(getDevice())
     audio_path = outputPath + f"audios/{title}/"
     Path(audio_path).mkdir(parents=True, exist_ok=True)
     for part, (inputs, is_tagged) in enumerate(tqdm(prompt_inputs, desc=f"{title}", ncols=90, position=1, file=sys.stdout)):
@@ -222,18 +219,16 @@ def singleProcess(model, snac_model, tokenizer, outputPath, para_breaks, tagged_
                 correlation = np.corrcoef(input_lengths, generation_times)[0, 1]
                 writer.add_scalar("Performance/InputDurationCorr", correlation, step)
 
-        # create_audio(generated_tokens_full, snac_model, audio_path, para_breaks, tagged_list, title)
-
     writer.close()
 
     part_files = _gather_sorted_part_files(outputPath + "/audios/", title)
 
     generated_tokens_full = [np.load(file) for file in part_files]
 
-    create_audio(generated_tokens_full, snac_model, audio_path, para_breaks, tagged_list, title)
+    save_snac_tokens(generated_tokens_full, audio_path, para_breaks, tagged_list, title)
 
 
-def multiGPU(GPUCount, MODEL_NAME, CACHE_PATH, platform, snac_model, outputPath, para_breaks, tagged_list,
+def multiGPU(GPUCount, MODEL_NAME, CACHE_PATH, platform, outputPath, para_breaks, tagged_list,
              prompt_inputs, title):
 
     task_q = mp.Queue()
@@ -283,17 +278,10 @@ def multiGPU(GPUCount, MODEL_NAME, CACHE_PATH, platform, snac_model, outputPath,
     # Concatenate parts into one generated_ids object
     generated_tokens_full = [np.load(file) for file in part_files]
 
-    device = torch.device("cuda:0")
-    snac_model.to(device)
-    snac_model.eval()
-    for p in snac_model.parameters():
-        p.requires_grad = False
-
-    completed = create_audio(generated_tokens_full, snac_model, audio_path, para_breaks, tagged_list, title)
+    completed = save_snac_tokens(generated_tokens_full, audio_path, para_breaks, tagged_list, title)
 
     # cleanup
     try:
-        del snac_model
         del generated_tokens_full
         torch.cuda.empty_cache()
     except Exception:
