@@ -337,7 +337,7 @@ def gpu_worker(gpu_id, MODEL_NAME, CACHE_PATH, platform, task_q, metrics_q, outp
         try:
 
             generated_tokens, meta = processVoice(model, tokenizer, inputs, is_tagged, idx)
-
+            Path(outputPath).mkdir(parents=True, exist_ok=True)
             np.save(outputPath + f"part_{idx}.npy", generated_tokens)
 
             try:
