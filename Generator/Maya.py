@@ -14,17 +14,6 @@ from Emotions.utils import getDevice, clear_cache
 from Generator.decoder import create_audio
 from Generator.utils import batch_sentences, getARModel, getSnacModel, getTokenizer
 
-
-def _suppress_cpp_warnings():
-    # redirect low-level C++ stderr to /dev/null
-    devnull = os.open(os.devnull, os.O_WRONLY)
-    os.dup2(devnull, 2)  # fd=2 → stderr
-    os.close(devnull)
-
-
-def _mp_initializer():
-    _suppress_cpp_warnings()
-
 warnings.filterwarnings("ignore")
 
 CODE_START_TOKEN_ID = 128257
@@ -116,7 +105,7 @@ def convert(Args, pages, outputPath):
         }
 
     processed = 0
-    for page in tqdm(pages, desc="Pages", ncols=120, position=0):
+    for page in tqdm(pages, desc="Pages", ncols=120, position=0, file=sys.stdout):
         try:
             chunks, tagged_list, para_breaks = batch_sentences(page['content'])
 
@@ -211,7 +200,7 @@ def singleProcess(model, snac_model, tokenizer, outputPath, para_breaks, tagged_
     snac_model = snac_model.to(getDevice())
     audio_path = outputPath + f"audios/{title}/"
     Path(audio_path).mkdir(parents=True, exist_ok=True)
-    for part, (inputs, is_tagged) in enumerate(tqdm(prompt_inputs, desc=f"{title}", ncols=90, position=1)):
+    for part, (inputs, is_tagged) in enumerate(tqdm(prompt_inputs, desc=f"{title}", ncols=90, position=1, file=sys.stdout)):
         # print(chunk)
         # print(f"Voice generation for part {step}/{total} ...")
         generated_ids, (generation_time, audio_duration, rtf, tps) = processVoice(model, tokenizer, inputs, is_tagged,

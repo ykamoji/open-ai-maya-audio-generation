@@ -1,18 +1,5 @@
 import os
-
 from auto_tone_equalize import process_npy
-
-
-def _suppress_cpp_warnings():
-    # redirect low-level C++ stderr to /dev/null
-    devnull = os.open(os.devnull, os.O_WRONLY)
-    os.dup2(devnull, 2)  # fd=2 → stderr
-    os.close(devnull)
-
-
-# Suppress C++/CUDA/XLA warnings for the main process
-_suppress_cpp_warnings()
-
 import glob
 import json
 import random
@@ -29,6 +16,13 @@ from Emotions.emotionDetection import detectEmotions
 from utils import CustomObject, get_yaml_loader, updateCache
 from Generator.OpenAI import convert as openAIConvert
 from Generator.Maya import convert as mayaConvert
+
+
+def _suppress_cpp_warnings():
+    # redirect low-level C++ stderr to /dev/null
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(devnull, 2)  # fd=2 → stderr
+    os.close(devnull)
 
 
 def setHeader(step_name):
@@ -263,6 +257,7 @@ class VoiceGenerator:
             setFooter(step_name)
 
         if 5 in self.Args.Steps:
+            _suppress_cpp_warnings()
             step_name = " Post processing Emotions (Detection) "
             setHeader(step_name)
             emotion_cache = self.EMOTION_CACHE[notebook_name][section_name]
@@ -316,6 +311,7 @@ class VoiceGenerator:
             setFooter(step_name)
 
         if 7 in self.Args.Steps:
+            _suppress_cpp_warnings()
             step_name = " Post processing Emotions (Insertion) "
             setHeader(step_name)
             emotion_cache = self.EMOTION_CACHE[notebook_name][section_name]
@@ -347,6 +343,7 @@ class VoiceGenerator:
                         "content": sec_cache[page['title']]
                     })
             if contents_to_process:
+                _suppress_cpp_warnings()
                 print(f"\nNeed to generation voices for {len(contents_to_process)} page(s).")
                 processed = 0
                 if self.Args.Generator.OpenAI.Action:

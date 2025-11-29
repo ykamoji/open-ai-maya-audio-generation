@@ -3,6 +3,7 @@ import os
 import numpy as np
 from pathlib import Path
 from Emotions.utils import clear_cache
+from Generator.utils import getSnacModel
 
 CODE_END_TOKEN_ID = 128258
 CODE_TOKEN_OFFSET = 128266
@@ -58,43 +59,6 @@ def unpack_snac_from_7(snac_tokens: list) -> list:
     return [l1, l2, l3]
 
 
-def learn_silence_frame(snac_model):
-
-
-    # generate 2 seconds of PCM silence
-    sil_pcm = torch.zeros(1, 1, SAMPLING_RATE * 2, dtype=torch.float32, device='cuda:0')
-
-    with torch.inference_mode():
-        L1, L2, L3 = snac_model.encode(sil_pcm)
-
-    L1 = L1[0].cpu().numpy()
-    L2 = L2[0].cpu().numpy()
-    L3 = L3[0].cpu().numpy()
-
-    mid = L1.shape[0] // 2
-
-    # stable silence clusters
-    L1_s = int(L1[mid])
-    L2a_s = int(L2[mid, 0])
-    L2b_s = int(L2[mid, 1])
-    L3a_s = int(L3[mid, 0])
-    L3b_s = int(L3[mid, 1])
-    L3c_s = int(L3[mid, 2])
-    L3d_s = int(L3[mid, 3])
-
-    silence_frame = [
-        CODE_TOKEN_OFFSET + L1_s,
-        CODE_TOKEN_OFFSET + L2a_s,
-        CODE_TOKEN_OFFSET + L3a_s,
-        CODE_TOKEN_OFFSET + L3b_s,
-        CODE_TOKEN_OFFSET + L2b_s,
-        CODE_TOKEN_OFFSET + L3c_s,
-        CODE_TOKEN_OFFSET + L3d_s,
-    ]
-
-    return silence_frame
-
-
 def generate_true_silence(duration_sec, silence_frame, samples_per_frame):
     frame_duration = samples_per_frame / SAMPLING_RATE
     frames = int(round(duration_sec / frame_duration))
@@ -108,12 +72,12 @@ def saveAudio(outputPath, audio_frames, title):
     # sf.write(outputPath + f'{title}.wav', audio_frames, samplerate=24000)
 
 
-def decode_audio(generated_snac_tokens, snac_model):
+def decode_audio(generated_snac_tokens, snac_model, device):
     # Extract SNAC audio Level tokens
     levels = unpack_snac_from_7(generated_snac_tokens)
 
     codes_tensor = [
-        torch.tensor(level, dtype=torch.long, device='cuda:0').unsqueeze(0)
+        torch.tensor(level, dtype=torch.long, device=device).unsqueeze(0) # 'cuda:0'
         for level in levels
     ]
 
@@ -128,28 +92,14 @@ def decode_audio(generated_snac_tokens, snac_model):
     return audio.astype(np.float32)
 
 
-def generate_snac_silence_tokens(duration_sec):
-    """
-    SNAC silence = using RVQ index 0 at all levels.
-    Therefore token_id = CODE_TOKEN_OFFSET.
-    """
-    if duration_sec <= 0:
-        return []
-
-    frame_duration = SAMPLES_PER_FRAME / float(SAMPLING_RATE)
-    frames = int(round(duration_sec / frame_duration))
-
-    return [CODE_TOKEN_OFFSET] * (frames * SNAC_TOKENS_PER_FRAME)
-
-
-def measure_samples_per_frame(snac_model, silence_frame):
-    one_frame_audio = decode_audio(silence_frame, snac_model)
+def measure_samples_per_frame(snac_model, silence_frame, device):
+    one_frame_audio = decode_audio(silence_frame, snac_model, device)
     return len(one_frame_audio)
+
 
 # --- Main assembler ---
 def assemble_snac_segments_and_stitch(
         generated_parts_tokens,        # list of token sequences per chunk
-        snac_model,
         silence_frame,
         samples_per_frame,
         para_break_indices=None,       # NEW: list of chunk indices where paragraph breaks occur
@@ -199,17 +149,14 @@ def assemble_snac_segments_and_stitch(
             silence_tokens = generate_true_silence(silence_schedule[i], silence_frame, samples_per_frame)
             final_codes.extend(silence_tokens)
 
-    # ------------------------------
-    # 3. Decode all in one go
-    # ------------------------------
-    final_audio = decode_audio(final_codes, snac_model)
-    return final_audio.reshape(-1)
+    return final_codes
 
 
 def create_audio(generated_outputs, snac_model, audio_path, para_breaks, tagged_list, title):
     completed = True
     try:
 
+        device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
         data = {
             "chunks": generated_outputs,
             "para_breaks": para_breaks,
@@ -217,20 +164,22 @@ def create_audio(generated_outputs, snac_model, audio_path, para_breaks, tagged_
         }
 
         Path(audio_path).mkdir(parents=True, exist_ok=True)
-        np.save(os.path.join(audio_path, f"{title}_meta.npy"), data)
+        if not os.path.isfile(os.path.join(audio_path, f"{title}_meta.npy")):
+            np.save(os.path.join(audio_path, f"{title}_meta.npy"), data)
 
         # learn silence frame
-        silence_frame = learn_silence_frame(snac_model)
+        silence_frame = [130334, 130002, 131688, 131688, 130002, 131688, 131688]
 
         # true frame size
-        samples_per_frame = measure_samples_per_frame(snac_model, silence_frame)
+        samples_per_frame = 2048
 
         stream = []
         for gen_out in generated_outputs:
             stream.extend(extract_snac_codes(gen_out))
-        audio_frames = decode_audio(stream, snac_model)
+        audio_frames = decode_audio(stream, snac_model, device)
         saveAudio(audio_path, audio_frames, title+'_normal')
-        audio_frames = assemble_snac_segments_and_stitch(generated_outputs, snac_model, silence_frame, samples_per_frame, para_breaks, tagged_list)
+        final_codes = assemble_snac_segments_and_stitch(generated_outputs, silence_frame, samples_per_frame, para_breaks, tagged_list)
+        audio_frames = decode_audio(final_codes, snac_model, device)
         saveAudio(audio_path, audio_frames, title+'_stitch')
     except Exception as e:
         print(f"Snac model Decoding error: {e}")
@@ -240,11 +189,15 @@ def create_audio(generated_outputs, snac_model, audio_path, para_breaks, tagged_
 
 
 if __name__ == '__main__':
-    audio_path = ""
-    title = ""
-    data = np.load(os.path.join(audio_path, f"{title}_meta.npy"), allow_pickle=True).item()
+    title = "David (Chapter 15)"
+    audio_path = f"output/audios/{title}"
+    data = np.load(os.path.join(audio_path, f"{title}_meta.npy"), allow_pickle=True)
+    data = data.item()
     generated_outputs = data["chunks"]
     para_breaks = data["para_breaks"]
     tagged_list = data["tagged_list"]
 
-    create_audio(generated_outputs, snac_model=None, audio_path=audio_path, para_breaks=para_breaks, tagged_list=tagged_list)
+    snac_model = getSnacModel("models/")
+    # snac_model.to(getDevice())
+
+    create_audio(generated_outputs, snac_model=snac_model, audio_path=audio_path, para_breaks=para_breaks, tagged_list=tagged_list, title=title)

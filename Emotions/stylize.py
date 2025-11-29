@@ -2,6 +2,7 @@ import torch
 import inspect
 import time
 import warnings
+import sys
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from Generator.utils import createChunks
@@ -66,7 +67,7 @@ def stylize(model, tokenizer, pages, notebook_name, section_name, VOICE_CACHE, o
     BATCH_SIZE = 20
     past_batch = repeat_past_kv(static_past, BATCH_SIZE)
     processed = 0
-    for page in tqdm(pages, desc="Pages", ncols=100, position=0):
+    for page in tqdm(pages, desc="Pages", ncols=100, position=0, file=sys.stdout):
         content = page['content']
         try:
             chunks = createChunks(content, limit=2000)
@@ -92,7 +93,7 @@ def paragraph_stylization(title, model, prompts, tokenizer, static_mask, past_ba
     outputs = []
     device = next(model.parameters()).device
     writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
-    for i in tqdm(range(0, len(prompts), BATCH_SIZE), desc=f"{title}", ncols=90, position=1):
+    for i in tqdm(range(0, len(prompts), BATCH_SIZE), desc=f"{title}", ncols=90, position=1, file=sys.stdout):
         try:
             start = time.time()
             batch_prompts = prompts[i: i + BATCH_SIZE]

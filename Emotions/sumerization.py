@@ -2,6 +2,7 @@ import re
 import inspect
 import torch
 import time
+import sys
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from Emotions.utils import fast_generate_sampling, clear_cache, getDevice
@@ -179,7 +180,7 @@ def summarization(model, tokenizer, pages, notebook_name, section_name, TITLE_CA
 
     processed = 0
     writer = SummaryWriter(log_dir=f"{outputPath}runs/Summarization")
-    for page in tqdm(pages, desc="Pages", ncols=100):
+    for page in tqdm(pages, desc="Pages", ncols=100, file=sys.stdout):
         try:
             start = time.time()
             summary = getSummaries(page['content'], model, tokenizer)

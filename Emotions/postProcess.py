@@ -1,6 +1,7 @@
 import re
 import json
 import os
+import sys
 import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from collections import Counter, deque
@@ -25,7 +26,7 @@ def voice_post_process(voice_cache):
     post_process_paragraphs = {}
     clean_paragraphs_count = 0
     split_paragraphs_count = 0
-    for key in tqdm(voice_cache, desc=f"Page"):
+    for key in tqdm(voice_cache, desc=f"Page", file=sys.stdout):
         split_paragraph = False
         cleaned_paragraphs = []
         for paragraph in voice_cache[key]:
@@ -180,7 +181,7 @@ def emotion_det_post_process(lines, title):
     processed_results = [None] * len(lines)
     with ProcessPoolExecutor() as executor:
         futures = {executor.submit(process_emotions, l): i for i, l in enumerate(lines)}
-        for f in tqdm(as_completed(futures), total=len(futures), desc=f"{title}"):
+        for f in tqdm(as_completed(futures), total=len(futures), desc=f"{title}", file=sys.stdout):
             i = futures[f]
             processed_results[i] = f.result()
 
@@ -405,7 +406,7 @@ def emotion_inst_post_process(lines, title):
     processed_results = [None] * len(lines)
     with ProcessPoolExecutor() as executor:
         futures = {executor.submit(process_insertions, l): i for i, l in enumerate(lines)}
-        for f in tqdm(as_completed(futures), total=len(futures), desc=f"{title}"):
+        for f in tqdm(as_completed(futures), total=len(futures), desc=f"{title}", file=sys.stdout):
             i = futures[f]
             processed_results[i] = f.result()
 

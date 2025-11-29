@@ -1,6 +1,7 @@
 import inspect
 import json
 import time
+import sys
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from Emotions.utils import *
@@ -197,7 +198,7 @@ def detect_batch(title, indices, sentences, model, tokenizer, outputPath, BATCH_
 
     outputs = ["" for _ in range(len(indices))]
     writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
-    for i in tqdm(range(0, len(indices), BATCH_SIZE), desc=f"{title}", ncols=90, position=1):
+    for i in tqdm(range(0, len(indices), BATCH_SIZE), desc=f"{title}", ncols=90, position=1, file=sys.stdout):
         chunk = indices[i:i + BATCH_SIZE]
         start = time.time()
         dynamic_prompts = []
@@ -348,7 +349,7 @@ def detectEmotions(model, tokenizer, pages, notebook_name, section_name, EMOTION
     init_verification_prefix_cache(model, tokenizer, BATCH_SIZE)
     print("Completed KV batch prefix caching.")
 
-    for page in tqdm(pages, desc="Pages", ncols=100, position=0):
+    for page in tqdm(pages, desc="Pages", ncols=100, position=0, file=sys.stdout):
         content = page['content']
         try:
             lines = []

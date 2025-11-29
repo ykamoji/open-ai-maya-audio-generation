@@ -1,6 +1,7 @@
 import torch
 import inspect
 import time
+import sys
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from Emotions.utils import clear_cache, fast_generate, slice_prefix_kv, repeat_past_kv
@@ -100,7 +101,7 @@ def insert_emotion_index(title, sentences, tags, model, tokenizer, outputPath, B
     global PLACEMENT_STATIC_MASK, PLACEMENT_STATIC_BATCH_PAST
 
     writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
-    for i in tqdm(range(0, N, BATCH_SIZE), desc=f"{title}", ncols=90, position=1):
+    for i in tqdm(range(0, N, BATCH_SIZE), desc=f"{title}", ncols=90, position=1, file=sys.stdout):
         batch_sentences = sentences[i:i + BATCH_SIZE]
         batch_tags = tags[i:i + BATCH_SIZE]
         start_time = time.time()
@@ -168,7 +169,7 @@ def insertEmotions(model, tokenizer, pages, notebook_name, section_name, EMOTION
     init_static_placement_cache(tokenizer, model, BATCH_SIZE)
     print("Completed KV batch prefix caching.")
     progress = 0
-    for page in tqdm(pages, desc="Pages", ncols=100, position=0):
+    for page in tqdm(pages, desc="Pages", ncols=100, position=0, file=sys.stdout):
         try:
             insert_line_pos = []
             sentences = []
