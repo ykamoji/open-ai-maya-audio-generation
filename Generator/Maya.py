@@ -107,6 +107,11 @@ def convert(Args, pages, outputPath):
         try:
             chunks, tagged_list, para_breaks = batch_sentences(page['content'])
 
+            ## when partial parts were interrupted from last session
+            part_files = _gather_sorted_part_files(outputPath + "/audios/", page['title'])
+            if part_files:
+                chunks = chunks[len(part_files):]
+
             # br = 0
             # for l, chunk in enumerate(chunks):
             #     print(chunk + f" Tagged: {tagged_list[l]}")
@@ -364,16 +369,20 @@ def gpu_worker(gpu_id, MODEL_NAME, CACHE_PATH, platform, task_q, metrics_q, outp
                 pass
 
 
+def idx_from_name(p):
+    base = os.path.basename(p)
+    name = os.path.splitext(base)[0]
+    try:
+        return int(name.split("_")[1])
+    except Exception:
+        return 10 ** 9
+
+
 def _gather_sorted_part_files(parts_dir, title):
     files = [file for file in glob.glob(parts_dir + f"{title}/*.npy") if "part_" in file]
 
-    def idx_from_name(p):
-        base = os.path.basename(p)
-        name = os.path.splitext(base)[0]
-        try:
-            return int(name.split("_")[1])
-        except Exception:
-            return 10 ** 9
+    if len(files) == 0:
+        return []
 
     return sorted(files, key=idx_from_name)
 

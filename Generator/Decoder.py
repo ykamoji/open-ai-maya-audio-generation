@@ -1,5 +1,6 @@
 import torch
 import os
+import re
 import json
 import srt
 from datetime import timedelta
@@ -198,7 +199,6 @@ def getDialogues(title):
     return audio_lines
 
 
-
 def write_srt(sentences, timeline, out_path):
 
     subtitles = []
@@ -275,7 +275,7 @@ def decode(device, generated_outputs, snac_model, audio_path, para_breaks, tagge
 
         saveAudio(audio_path, audio_frames, title)
 
-        speed_factor = 1.15
+        speed_factor = 1.20
         process_npy(input_path=os.path.join(audio_path, f"{title}.npy"),
                     output_wav=os.path.join(audio_path, f"{title}.wav"),
                     tempo=speed_factor)
@@ -291,15 +291,21 @@ def decode(device, generated_outputs, snac_model, audio_path, para_breaks, tagge
     return completed
 
 
+def getChapterNo(title):
+    return int(re.search(r'\d+', title).group())
+
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="Decoding")
     parser.add_argument("--path", type=str, default="/output", help="Audio Output Path")
     parser.add_argument("--modelPath", type=str, default="/models", help="Snac Model Path")
+    parser.add_argument("--limits", type=json.loads, default=None, help="Range")
     args = parser.parse_args()
 
     path = args.path
     model_path = args.modelPath
+    limits = args.limits
 
     if not os.path.isdir(path):
         raise Exception(f"{path} is not a directory. Check and give correct path.")
@@ -313,7 +319,18 @@ if __name__ == '__main__':
     device = 'cuda:0' if torch.cuda.is_available() else getDevice()
     snac_model.to(device)
 
+    files.sort(key=lambda x: getChapterNo(x))
+    start = 0
+    end = len(files)
+    if limits:
+        start = limits[0]
+        end = limits[1]
+
     for file in files:
+        currentChapter = getChapterNo(file)
+        if not start <= currentChapter <= end:
+            continue
+
         title = os.path.split(file)[-1].split("_")[0]
         audio_path = os.path.split(file)[-2]
         data = np.load(file, allow_pickle=True)
@@ -334,6 +351,11 @@ if __name__ == '__main__':
         else:
             print(f"Error for {title}. Check error logs.")
 
-
+    ## TO check part voices
+    # gen_out = np.load("output/audios/part_5.npy")
+    #
+    # audio = decode_audio(extract_snac_codes(gen_out), snac_model, device)
+    # import soundfile as sf
+    # sf.write("output/audios/check.wav", audio, SAMPLING_RATE, "FLOAT")
 
 
