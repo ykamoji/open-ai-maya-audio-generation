@@ -343,7 +343,7 @@ class VoiceGenerator:
             sec_cache = nb_cache.setdefault(section_name, {})
             if not sec_cache:
                 raise Exception(f"You don't have any emotion lines to process for {notebook_name} {section_name}")
-            audio_chapters = [file for file in glob.glob(outputPath + "audios/*/*.npy") if "part" not in file]
+            audio_chapters = [file for file in glob.glob(outputPath + "audios/*/*.npy") if "_meta" in file]
             contents_to_process = []
             for page in pages:
                 if page["title"] not in audio_chapters or self.checkInPageNums(page["title"]):

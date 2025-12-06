@@ -108,9 +108,11 @@ def convert(Args, pages, outputPath):
             chunks, tagged_list, para_breaks = batch_sentences(page['content'])
 
             ## when partial parts were interrupted from last session
+            start = 0
             part_files = _gather_sorted_part_files(outputPath + "/audios/", page['title'])
             if part_files:
-                chunks = chunks[len(part_files):]
+                chunks = chunks[len(part_files) - 1:]
+                start = len(part_files) - 1
 
             # br = 0
             # for l, chunk in enumerate(chunks):
@@ -131,6 +133,7 @@ def convert(Args, pages, outputPath):
                              para_breaks=para_breaks,
                              tagged_list=tagged_list,
                              prompt_inputs=prompt_inputs,
+                             start=start,
                              title=page['title'])
             processed += 1
         except Exception as e:
@@ -194,7 +197,7 @@ def processVoice(model, tokenizer, inputs, is_tagged, part):
     return generated_tokens, (generation_time, audio_duration, rtf, tps)
 
 
-def singleProcess(model, tokenizer, outputPath, para_breaks, tagged_list, prompt_inputs, title):
+def singleProcess(model, tokenizer, outputPath, para_breaks, tagged_list, prompt_inputs, start, title):
     input_lengths = []
     generation_times = []
     writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
@@ -202,7 +205,9 @@ def singleProcess(model, tokenizer, outputPath, para_breaks, tagged_list, prompt
     model = model.to(getDevice())
     audio_path = outputPath + f"audios/{title}/"
     Path(audio_path).mkdir(parents=True, exist_ok=True)
-    for part, (inputs, is_tagged) in enumerate(tqdm(prompt_inputs, desc=f"{title}", ncols=90, position=1, file=sys.stdout)):
+    for part, (inputs, is_tagged) in enumerate(
+            tqdm(prompt_inputs, desc=f"{title}", ncols=90, position=1, file=sys.stdout, initial=start),
+                                               start=start):
         # print(chunk)
         # print(f"Voice generation for part {step}/{total} ...")
         generated_ids, (generation_time, audio_duration, rtf, tps) = processVoice(model, tokenizer, inputs, is_tagged,
@@ -248,7 +253,7 @@ def singleProcess(model, tokenizer, outputPath, para_breaks, tagged_list, prompt
 
 
 def multiGPU(GPUCount, MODEL_NAME, CACHE_PATH, platform, outputPath, para_breaks, tagged_list,
-             prompt_inputs, title):
+             prompt_inputs, start, title):
 
     task_q = mp.Queue()
     metrics_q = mp.Queue()
@@ -257,7 +262,7 @@ def multiGPU(GPUCount, MODEL_NAME, CACHE_PATH, platform, outputPath, para_breaks
     audio_path = outputPath + f"audios/{title}/"
 
     # push tasks
-    for idx, inp in enumerate(prompt_inputs):
+    for idx, inp in enumerate(prompt_inputs, start=start):
         task_q.put((idx, inp))
 
     # sentinels
@@ -267,7 +272,7 @@ def multiGPU(GPUCount, MODEL_NAME, CACHE_PATH, platform, outputPath, para_breaks
     # start aggregator process
     agg_proc = mp.Process(
         target=metric_worker,
-        args=(metrics_q, outputPath, title, done_event, len(prompt_inputs)),
+        args=(metrics_q, outputPath, title, done_event, start, len(prompt_inputs)),
         daemon=True,
     )
     agg_proc.start()
@@ -387,14 +392,14 @@ def _gather_sorted_part_files(parts_dir, title):
     return sorted(files, key=idx_from_name)
 
 
-def metric_worker(metrics_q, outputPath, title, done_event, total_parts, log_steps=5):
+def metric_worker(metrics_q, outputPath, title, done_event, start, total_parts, log_steps=5):
     writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
     input_lengths = []
     generation_times = []
     received = 0
     errors = 0
     recent = deque(maxlen=1000)
-    pbar = tqdm(total=total_parts, desc=f"{title}", ncols=90, position=1, file=sys.stdout)
+    pbar = tqdm(total=total_parts, desc=f"{title}", ncols=90, position=1, file=sys.stdout, initial=start)
     while True:
         try:
             metric = metrics_q.get(timeout=1.0)
