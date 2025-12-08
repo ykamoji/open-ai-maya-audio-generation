@@ -284,6 +284,11 @@ def decode(device, generated_outputs, snac_model, audio_path, para_breaks, tagge
 
         write_srt(lines, timeline, os.path.join(audio_path, f"{title}.srt"))
 
+        try:
+            os.remove(os.path.join(audio_path, f"{title}.npy"))
+        except Exception:
+            pass
+
     except Exception as e:
         print(f"Decoding error: {e}")
         completed = False
