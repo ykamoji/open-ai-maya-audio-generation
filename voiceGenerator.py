@@ -83,11 +83,8 @@ class VoiceGenerator:
 
         number = re.search(r"(?i)\bchat?pter\s*#?\s*(\d+)", title).group(1)
 
-        if not re.search(r"Chapter\s+\d+,\s*(.+)", pages[0]).group(1).strip():
+        if number:
             pages.pop(0)
-        else:
-            pages[0] = pages[0].replace("  ", " ")
-            return
 
         titles = self.TITLE_CACHE.get(notebook_name, {}).get(section_name, {}).get(title, {})
         chapter_title = ""
