@@ -3,6 +3,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from snac import SNAC
 import re
 
+from Generator.Dialogues import process
+
 pattern = r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<![A-Z]\.)(?<=\.)\s'
 
 
@@ -62,57 +64,50 @@ def convert_to_sentences(content):
     return [se for se in re.split(pattern, content) if se.strip()]
 
 
-_tag_pat = re.compile(r"\s*(<[^>]+>)\s*")
+TAG_RE = re.compile(r"<[^<>]+>")
 
 
-def batch_sentences(lines, limit=20):
-    chunks = []
-    para_breaks = []
-    current_tokens = []
-
-    lines.insert(1, "") # for para break on the title
-
-    def flush_current():
-        if not current_tokens:
-            return False
-        chunk_text = " ".join(current_tokens).strip()
-        chunks.append(chunk_text)
-        current_tokens.clear()
-        return True
-
-    for line in lines:
-        stripped = line.rstrip("\n")
-
-        if stripped.strip() == "":
-            did_flush = flush_current()
-            if did_flush:
-                para_breaks.append(len(chunks) - 1)
-            continue
-
-        tokens = stripped.strip()
-        if not current_tokens:
-            current_tokens.append(tokens)
+def batch_sentences(lines, limit=25):
+    paragraphs = []
+    current = ""
+    for line in lines[1:]:
+        if line.strip() == "":
+            paragraphs.append(current.strip())
+            current = ""
         else:
-            curr_wc = sum(len(s.split()) for s in current_tokens)
-            new_wc = len(tokens.split())
-            if curr_wc + new_wc > limit:
-                flush_current()
-                current_tokens.append(tokens)
-            else:
-                current_tokens.append(tokens)
+            current += line.strip().replace("  ", " ") + " "
 
-    flush_current()
+    if current.strip() != "":
+        paragraphs.append(current.strip())
 
-    if len(chunks) > 0:
-        if 0 not in para_breaks:
-            para_breaks.insert(0, 0)
+    chunks, tagged_list, para_breaks, broken_paras = process(paragraphs, limit)
 
-    tagged_list = [
-        bool(_tag_pat.search(chunk))
-        for chunk in chunks
-    ]
+    if len(broken_paras) > 0:
+        print("\n\nBroken paragraphs.")
+        for para in broken_paras:
+            print("\n" + para +"\n")
 
-    return chunks, tagged_list, para_breaks
+    chunks.insert(0, lines[0])
+    tagged_list.insert(0, False)
+    para_breaks.insert(0, 0)
+
+    para_breaks = para_breaks[:-1]
+
+    br = 0
+    # print("\n")
+    for l, chunk in enumerate(chunks):
+        # print(chunk + f" Tagged: {tagged_list[l]}")
+        # print(chunk)
+        num_tags =  len(TAG_RE.findall(chunk))
+        if num_tags > 1:
+            print(f"Multiple tags in {chunk}\t\t{num_tags}")
+            print("\n")
+
+        # if br < len(para_breaks) and l == para_breaks[br]:
+        #     print("------Para break-------")
+        #     br += 1
+
+    return chunks, tagged_list, para_breaks, broken_paras
 
 
 def paraChunks(paragraphs, limit):

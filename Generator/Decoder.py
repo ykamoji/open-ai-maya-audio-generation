@@ -227,6 +227,9 @@ def decode(device, generated_outputs, snac_model, audio_path, para_breaks, tagge
         # true frame size
         samples_per_frame = 2048
 
+        # speed up
+        speed_factor = 1.25
+
         # audio_frames = []
         # for gen_out in tqdm(generated_outputs, desc=f"Normal", ncols=100, file=sys.stdout):
         #     audio_frames.extend(decode_audio(extract_snac_codes(gen_out), snac_model, device))
@@ -236,9 +239,18 @@ def decode(device, generated_outputs, snac_model, audio_path, para_breaks, tagge
         #             output_wav=os.path.join(audio_path, f"audiobook_{getChapter(title)}_n.npy"))
 
         lines = getDialogues(title)
+        silence_between_chunks = 0.20 / speed_factor
+        tagged_silence = 0.30 / speed_factor
+        paragraph_silence = 0.60 / speed_factor
 
-        final_codes = assemble_snac_segments_and_stitch(generated_outputs, silence_frame, samples_per_frame,
-                                                        para_breaks, tagged_list)
+        final_codes = assemble_snac_segments_and_stitch(generated_outputs,
+                                                        silence_frame,
+                                                        samples_per_frame,
+                                                        para_breaks,
+                                                        tagged_list,
+                                                        silence_between_chunks,
+                                                        tagged_silence,
+                                                        paragraph_silence)
         audio_frames = []
         saved_decoded_audio = []
         decoded_audio_available = True
@@ -275,7 +287,6 @@ def decode(device, generated_outputs, snac_model, audio_path, para_breaks, tagge
 
         saveAudio(audio_path, audio_frames, title)
 
-        speed_factor = 1.20
         process_npy(input_path=os.path.join(audio_path, f"{title}.npy"),
                     output_wav=os.path.join(audio_path, f"{title}.wav"),
                     tempo=speed_factor)

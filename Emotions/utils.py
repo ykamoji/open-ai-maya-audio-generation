@@ -17,7 +17,7 @@ TONES = [
 ]
 
 SOUNDS = [
-    "[LAUGH]", "[LAUGH_HARDER]", "[SIGH]", "[CHUCKLE]", "[CRY]", "[SCREAM]", "[WHISPER]", "[SNORT]",
+    "[LAUGH]", "[LAUGH_HARDER]", "[SIGH]", "[CHUCKLE]", "[SCREAM]", "[WHISPER]", "[SNORT]",
     "[EXHALE]", "[GIGGLE]"
 ]
 

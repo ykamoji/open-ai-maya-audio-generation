@@ -105,7 +105,10 @@ def convert(Args, pages, outputPath):
     processed = 0
     for page in tqdm(pages, desc="Pages", ncols=120, position=0, file=sys.stdout):
         try:
-            chunks, tagged_list, para_breaks = batch_sentences(page['content'])
+            chunks, tagged_list, para_breaks, broken_paras = batch_sentences(page['content'])
+
+            if broken_paras:
+                continue
 
             ## when partial parts were interrupted from last session
             start = 0
@@ -114,14 +117,7 @@ def convert(Args, pages, outputPath):
                 chunks = chunks[len(part_files) - 1:]
                 start = len(part_files) - 1
 
-            # br = 0
-            # for l, chunk in enumerate(chunks):
-            #     print(chunk + f" Tagged: {tagged_list[l]}")
-            #     if br < len(para_breaks) and l == para_breaks[br]:
-            #         print("------Para break-------")
-            #         br += 1
-            #
-            # exit(1)
+            # continue
 
             description = getDescription(MayaArgs, page['title'])
             prompt_inputs = [
@@ -144,18 +140,9 @@ def convert(Args, pages, outputPath):
     return processed
 
 
-def estimate_tokens(tok_len):
-    if tok_len <= 60:
-        return tok_len * 12 + 150
-    elif tok_len <= 100:
-        return tok_len * 22 + 150
-    else:
-        return tok_len * 24 + 200
-
-
 def processVoice(model, tokenizer, inputs, is_tagged, part):
     try:
-        max_new_tokens = estimate_tokens(len(inputs['input_ids'][0]))
+        max_new_tokens = 2048
         start_time = time.time()
         while True:
             with torch.inference_mode():
@@ -163,9 +150,9 @@ def processVoice(model, tokenizer, inputs, is_tagged, part):
                     **inputs.to(model.device),
                     max_new_tokens=max_new_tokens,
                     min_new_tokens=28,  # At least 4 SNAC frames
-                    temperature=0.5 if is_tagged else 0.4,
-                    top_p=0.95 if is_tagged else 0.9,
-                    repetition_penalty=1.1,
+                    temperature=0.4 if is_tagged else 0.25,
+                    top_p=0.9 if is_tagged else 0.98,
+                    repetition_penalty=1.10 if is_tagged else 1.02,
                     do_sample=True,
                     eos_token_id=CODE_END_TOKEN_ID,  # Stop at end of speech token
                     pad_token_id=tokenizer.pad_token_id,
@@ -173,8 +160,8 @@ def processVoice(model, tokenizer, inputs, is_tagged, part):
                 )
             generated_tokens = outputs[0, inputs['input_ids'].shape[1]:].tolist()
             if CODE_END_TOKEN_ID not in generated_tokens:
-                max_new_tokens += 200
-                print(f"\nPart {part}. EOS token not found. Trying again with {max_new_tokens}")
+                max_new_tokens += 500
+                print(f"\nPart {part} ({len(inputs['input_ids'][0])}). EOS token not found. Trying again with {max_new_tokens}")
                 del outputs
                 del generated_tokens
             else:

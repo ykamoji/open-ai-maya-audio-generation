@@ -92,9 +92,9 @@ class VoiceGenerator:
         titles = self.TITLE_CACHE.get(notebook_name, {}).get(section_name, {}).get(title, {})
         chapter_title = ""
         if "best" in titles and titles["best"].strip():
-            chapter_title = titles["best"]
+            chapter_title = titles["best"].strip()
         elif "suggestions" in titles:
-            chapter_title = random.choice(titles["suggestions"])
+            chapter_title = random.choice(titles["suggestions"]).strip()
 
         if chapter_title:
             if not chapter_title.endswith('.'):
