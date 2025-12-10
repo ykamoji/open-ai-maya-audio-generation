@@ -1,5 +1,4 @@
 import os
-from auto_tone_equalize import process_npy
 import glob
 import json
 import random
@@ -96,6 +95,8 @@ class VoiceGenerator:
         if chapter_title:
             if not chapter_title.endswith('.'):
                 chapter_title += '.'
+
+        chapter_title  = chapter_title.replace("  "," ")
 
         chapter_title = f"Chapter {number}" + (f", {chapter_title}" if chapter_title else "")
         pages.insert(0, chapter_title)

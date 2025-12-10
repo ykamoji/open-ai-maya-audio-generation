@@ -98,7 +98,7 @@ def batch_sentences(lines, limit=25):
     for l, chunk in enumerate(chunks):
         # print(chunk + f" Tagged: {tagged_list[l]}")
         # print(chunk)
-        num_tags =  len(TAG_RE.findall(chunk))
+        num_tags = len(TAG_RE.findall(chunk))
         if num_tags > 1:
             print(f"Multiple tags in {chunk}\t\t{num_tags}")
             print("\n")

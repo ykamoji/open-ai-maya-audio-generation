@@ -133,6 +133,10 @@ def align_dialogue(dialogues):
 
 
 def split_expressions(line):
+    ## Since there is only one tag per sentence, multiple tags means multiple sentences,
+    # split based the first punctuation: [! ? or . ].
+    ## Since this is after dialogue processing, need to check for balanced quotes so that middle sentences are not cut.
+
     n = len(line)
     i = 0
     j = 0
@@ -142,20 +146,11 @@ def split_expressions(line):
         while i < n:
             if line[i] == '"':
                 quote_balanced += 1
-            elif line[i] == '.' or line[i] == '!' or line[i] == '?' or line[i] == '<':
+            elif line[i] == '.' or line[i] == '!' or line[i] == '?':
 
                 if quote_balanced % 2 == 0:
-
-                    if line[i] == '<':
-                        if i > 0 and i != j + 1:
-                            exp = line[j:i].strip()
-                            if exp[-1] not in punctuations:
-                                exp += '.'
-                            single_expressions.append(exp)
-                            j = i
-                    else:
-                        single_expressions.append(line[j:i+1].strip())
-                        j = i + 1
+                    single_expressions.append(line[j:i+1].strip())
+                    j = i + 1
             i += 1
 
         if j < i:
@@ -165,34 +160,15 @@ def split_expressions(line):
 
     return single_expressions
 
-
-TAG_RE = re.compile(r"(<[^<>]+>)")
-
 TAG_CHECK = re.compile(r"<[^<>]+>")
 
 
-def split_by_tags(line):
-    parts = TAG_RE.split(line)
-    result = []
-
-    if parts[0].strip():
-        result.append(parts[0].strip())
-
-    for i in range(1, len(parts), 2):
-        tag = parts[i].strip()
-        text = parts[i + 1].strip()
-        if text:
-            result.append(f"{tag} {text}")
-
-    return result
-
-
-def token_aware_splitting(lines):
+def expression_aware_splitting(lines):
 
     expression_lines = []
     for l in lines:
-        expressions = split_by_tags(l)
-        if len(expressions) > 1:
+        expressions_count = TAG_CHECK.findall(l)
+        if len(expressions_count) > 1:
             expression_lines.extend(split_expressions(l))
         else:
             expression_lines.append(l)
@@ -229,9 +205,14 @@ def process(paragraphs, limit):
             # Apply the limits
             para_lines = clean_dialogue(stage2, limit)
 
-        # After all dialogue processing, need to split sentences haveing multiple expressions to single.
+        # After all dialogue processing, need to split sentences having multiple expressions to single.
         # This logic removes around 95 % of the issues. Remaining cases are complex and should be manually fixed.
-        chunks.extend(token_aware_splitting(para_lines))
+        expression_lines = expression_aware_splitting(para_lines)
+
+        # For some reason, the model puts out double spaces instead of commas. Fixing it here, at the final dialogues.
+        expression_lines = [exp.replace("  ", ", ") for exp in expression_lines]
+
+        chunks.extend(expression_lines)
 
         para_breaks.append(len(chunks))
 

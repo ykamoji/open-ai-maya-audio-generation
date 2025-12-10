@@ -195,7 +195,7 @@ def getDialogues(title):
                     lines = data[notebook][section][page]
                     break
 
-    audio_lines, _, _ = batch_sentences(lines)
+    audio_lines, _, _, _ = batch_sentences(lines)
     return audio_lines
 
 

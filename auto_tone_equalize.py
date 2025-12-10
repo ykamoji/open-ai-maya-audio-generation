@@ -12,23 +12,23 @@ import glob
 
 DENOISE_STR = "anlmdn=s=6:p=0.0018"
 EQ_STR = (
-    # "highpass=f=80,"
-    # "equalizer=f=240:t=h:w=420:g=2.2,"        # existing body
-    # "equalizer=f=820:t=h:w=360:g=3.2,"        # existing warmth
-    # "equalizer=f=6000:t=h:w=4000:g=1.2,"      # gentle high-shelf / presence above ~6k
-    # "equalizer=f=10000:t=h:w=8000:g=0.9,"     # slight airy lift 10–16k
-    # "acompressor=threshold=-24dB:ratio=2:attack=5:release=50"
-
     "highpass=f=80,"
     "equalizer=f=200:t=h:w=350:g=1.4,"     # warmth restore
     "equalizer=f=750:t=h:w=480:g=2.6,"     # chest resonance (fix F1)
     "equalizer=f=3200:t=h:w=2000:g=0.8,"   # clarity band (returns consonant detail)
     "equalizer=f=7200:t=h:w=2600:g=1.6"    # AIR/SPARKLE BOOST (your main sparkle band)
 
+    # "highpass=f=90,"
+    # "equalizer=f=220:t=h:w=500:g=0.6,"
+    # "equalizer=f=2800:t=h:w=3000:g=0.6,"
+    # "equalizer=f=5200:t=h:w=2500:g=0.4"
 
 )
 
 LIMITER_STR = "loudnorm=I=-19.4:TP=-3.0:LRA=11"
+#
+# LIMITER_STR = "loudnorm=I=-17:TP=-1.5:LRA=6"
+
 
 FFMPEG = "ffmpeg"
 RUBBERBAND = "rubberband-r3"
@@ -85,12 +85,25 @@ def process_npy(input_path, output_wav, tempo=1.15):
     # ACX Loudness normalization
     run([
         FFMPEG, "-y", "-i", eq,
-        "-af", "loudnorm=I=-19:TP=-3:LRA=11",
+        "-af", LIMITER_STR,
         limited
     ])
 
     final = f"{base}.wav"
     run([FFMPEG, "-y", "-i", limited, "-ar", "48000", final])
+
+    # final = f"{base}.m4a"
+    # run([
+    #     FFMPEG, "-y",
+    #     "-i", limited,
+    #     "-ac", "1",  # mono
+    #     "-ar", "44100",  # AAC-friendly
+    #     "-c:a", "aac",
+    #     "-profile:a", "aac_low",
+    #     "-b:a", "128k",  # extra stability at 1.25x
+    #     "-movflags", "+faststart",
+    #     final
+    # ])
 
     os.remove(raw_wav)
     os.remove(speed)

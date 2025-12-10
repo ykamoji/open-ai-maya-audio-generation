@@ -152,7 +152,7 @@ def processVoice(model, tokenizer, inputs, is_tagged, part):
                     min_new_tokens=28,  # At least 4 SNAC frames
                     temperature=0.4 if is_tagged else 0.25,
                     top_p=0.9 if is_tagged else 0.98,
-                    repetition_penalty=1.10 if is_tagged else 1.02,
+                    repetition_penalty=1.10,
                     do_sample=True,
                     eos_token_id=CODE_END_TOKEN_ID,  # Stop at end of speech token
                     pad_token_id=tokenizer.pad_token_id,
@@ -161,7 +161,7 @@ def processVoice(model, tokenizer, inputs, is_tagged, part):
             generated_tokens = outputs[0, inputs['input_ids'].shape[1]:].tolist()
             if CODE_END_TOKEN_ID not in generated_tokens:
                 max_new_tokens += 500
-                print(f"\nPart {part} ({len(inputs['input_ids'][0])}). EOS token not found. Trying again with {max_new_tokens}")
+                print(f"\nPart {part} ({len(inputs['input_ids'][0])}). EOS token not found. Trying again with {max_new_tokens}\n")
                 del outputs
                 del generated_tokens
             else:
@@ -324,7 +324,7 @@ def gpu_worker(gpu_id, MODEL_NAME, CACHE_PATH, platform, task_q, metrics_q, outp
             _ = model.model.layers[0](model.model.embed_tokens(dummy))
     except Exception:
         pass
-    print(f"Voice warm up completed for GPU {gpu_id}")
+    print(f"\nVoice warm up completed for GPU {gpu_id}\n")
 
     while True:
         item = task_q.get()
