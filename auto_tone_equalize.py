@@ -31,7 +31,6 @@ LIMITER_STR = "loudnorm=I=-19.4:TP=-3.0:LRA=11"
 
 
 FFMPEG = "ffmpeg"
-RUBBERBAND = "rubberband-r3"
 
 # ================================
 # HELPER TO RUN COMMANDS
@@ -57,60 +56,35 @@ def process_npy(input_path, output_wav, tempo=1.15):
     base = os.path.splitext(output_wav)[0]
 
     # save as wav (PCM 16)
-    raw_wav = f"{base}_v1.wav"
+    raw_wav = f"{base}_16.wav"
     sf.write(raw_wav, audio, samplerate=24000, subtype="PCM_24")
 
-    speed = f"{base}_speed.wav"
-    # SPEED UP (tempo only, pitch preserved)
-    run([FFMPEG, "-y", "-i", raw_wav, "-filter:a", f"atempo={tempo}", speed])
+    filter_chain = (
+        f"atempo={tempo},"
+        "silenceremove=start_silence=0.15:start_threshold=-48dB:"
+        "stop_silence=0.15:stop_threshold=-48dB,"
+        f"{EQ_STR},"
+        f"{LIMITER_STR},"
+        "aresample=48000:precision=33"
+    )
 
-    # Gentle silence reduction (ACX standard)
-    trimmed = f"{base}_trimmed.wav"
-    run([
-        FFMPEG, "-y", "-i", speed,
-        "-af",
-        "silenceremove=start_silence=0.15:start_threshold=-48dB:stop_silence=0.15:stop_threshold=-48dB",
-        trimmed
-    ])
-    # denoised = f"{base}_denoised.wav"
-    # # Light denoise
-    # run([FFMPEG, "-y", "-i", trimmed, "-af", "anlmdn=s=7:p=0.003", denoised])
+    final = f"{base}.m4a"
 
-    denoised = trimmed
-    eq = f"{base}_eq.wav"
-    # ACX EQ (clarity + naturalness)
-    run([FFMPEG, "-y", "-i", denoised, "-af", EQ_STR, eq])
+    cmd = [
+        FFMPEG, "-y",
+        "-i", raw_wav,
+        "-filter:a", filter_chain,
+        "-c:a", "alac",
+        "-ac", "1",  # mono (recommended for audiobooks)
+        final
+    ]
 
-    limited = f"{base}_limited.wav"
-    # ACX Loudness normalization
-    run([
-        FFMPEG, "-y", "-i", eq,
-        "-af", LIMITER_STR,
-        limited
-    ])
+    run(cmd)
 
-    final = f"{base}.wav"
-    run([FFMPEG, "-y", "-i", limited, "-ar", "48000", final])
-
-    # final = f"{base}.m4a"
-    # run([
-    #     FFMPEG, "-y",
-    #     "-i", limited,
-    #     "-ac", "1",  # mono
-    #     "-ar", "44100",  # AAC-friendly
-    #     "-c:a", "aac",
-    #     "-profile:a", "aac_low",
-    #     "-b:a", "128k",  # extra stability at 1.25x
-    #     "-movflags", "+faststart",
-    #     final
-    # ])
-
-    os.remove(raw_wav)
-    os.remove(speed)
-    os.remove(denoised)
-    # os.remove(trimmed)
-    os.remove(eq)
-    os.remove(limited)
+    try:
+        os.remove(raw_wav)
+    except OSError:
+        pass
 
 
 # ================================
