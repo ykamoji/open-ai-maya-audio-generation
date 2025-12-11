@@ -76,12 +76,6 @@ def convert(Args, pages, outputPath):
 
     GPUCount = torch.cuda.device_count()
 
-    torch.manual_seed(0)
-    np.random.seed(0)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(0)
-        torch.cuda.manual_seed_all(0)
-
     if GPUCount > 1:
         print("\nRunning in multi GPU env.")
         mp.set_start_method("spawn", force=True)
@@ -140,9 +134,18 @@ def convert(Args, pages, outputPath):
     return processed
 
 
+def max_new_token_boundaries(input_length):
+    if input_length < 60:
+        return 2048
+    elif input_length < 100:
+        return 2600
+    else:
+        return 4600
+
+
 def processVoice(model, tokenizer, inputs, is_tagged, part):
     try:
-        max_new_tokens = 2048
+        max_new_tokens = max_new_token_boundaries(len(inputs["input_ids"][0]))
         start_time = time.time()
         while True:
             with torch.inference_mode():
@@ -185,6 +188,11 @@ def processVoice(model, tokenizer, inputs, is_tagged, part):
 
 
 def singleProcess(model, tokenizer, outputPath, para_breaks, tagged_list, prompt_inputs, start, title):
+    torch.manual_seed(0)
+    np.random.seed(0)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(0)
+        torch.cuda.manual_seed_all(0)
     input_lengths = []
     generation_times = []
     writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
@@ -325,6 +333,12 @@ def gpu_worker(gpu_id, MODEL_NAME, CACHE_PATH, platform, task_q, metrics_q, outp
     except Exception:
         pass
     print(f"\nVoice warm up completed for GPU {gpu_id}\n")
+
+    torch.manual_seed(0)
+    np.random.seed(0)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(0)
+        torch.cuda.manual_seed_all(0)
 
     while True:
         item = task_q.get()

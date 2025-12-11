@@ -162,8 +162,10 @@ class VoiceGenerator:
 
         start = self.Args.Generator.PageLimit[0]
         end = self.Args.Generator.PageLimit[1]
-
-        pages = pages[start:end]
+        if start:
+            pages = [p for p in pages if getChapterNo(p['title']) >= start]
+        if end:
+            pages = [p for p in pages if getChapterNo(p['title']) <= end]
 
         print(f"\nNotebook: {notebook_name}, Section: {section_name}\n")
 
