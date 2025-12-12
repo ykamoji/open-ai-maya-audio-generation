@@ -68,21 +68,55 @@ def process_npy(input_path, output_wav, tempo=1.15):
         "aresample=48000:precision=33"
     )
 
-    final = f"{base}.m4a"
+    processed_wav = f"{base}_processed.wav"
 
-    cmd = [
+    cmd_process = [
         FFMPEG, "-y",
         "-i", raw_wav,
         "-filter:a", filter_chain,
-        "-c:a", "alac",
-        "-ac", "1",  # mono (recommended for audiobooks)
-        final
+        "-ac", "2",  # convert mono → stereo
+        "-c:a", "pcm_s16le",  # 16-bit WAV (lossless)
+        processed_wav
     ]
+    run(cmd_process)
 
-    run(cmd)
+    # Step 2 — Convert WAV → Apple ALAC (true lossless)
+    temp_m4a = f"{base}_tmp.m4a"
+    cmd_afconvert = [
+        "afconvert",
+        "-f", "m4af",
+        "-d", "alac",
+        processed_wav,
+        temp_m4a
+    ]
+    run(cmd_afconvert)
+
+    final_m4a = f"{base}.m4a"
+
+    cmd_mp4box = [
+        "mp4box",
+        "-add", temp_m4a,
+        "-new", final_m4a
+    ]
+    run(cmd_mp4box)
+
+    # final = f"{base}.m4a"
+    #
+    # cmd = [
+    #     FFMPEG, "-y",
+    #     "-i", raw_wav,
+    #     "-filter:a", filter_chain,
+    #     "-c:a", "alac",
+    #     "-ac", "1",  # mono (recommended for audiobooks)
+    #     final
+    # ]
+
+    # run(cmd)
 
     try:
-        os.remove(raw_wav)
+        # os.remove(raw_wav)
+        # os.remove(processed_wav)
+        os.remove(temp_m4a)
     except OSError:
         pass
 

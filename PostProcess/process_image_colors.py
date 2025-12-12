@@ -9,9 +9,18 @@ import colorsys
 from sklearn.cluster import KMeans
 from skimage.color import deltaE_ciede2000, rgb2lab
 import numpy as np
+import os
 import warnings
+import glob
+import json
+import argparse
 
 warnings.filterwarnings("ignore")
+
+
+presets = {
+    'David (Chapter 15)': [204, 148, 18]
+}
 
 
 # ----------------------------------------------------------
@@ -174,24 +183,41 @@ def best_theme_color(path):
     return max(candidates)[1]
 
 
+def extract_image_scheme(path):
+
+    files = glob.glob(f"{path}/*.png")
+
+    data = {}
+    for file in tqdm(files, desc="Extracting"):
+        try:
+            filename = os.path.basename(file).split("/")[-1]
+            image_preset = presets.get(filename.split("/")[-1])
+            if image_preset:
+                color = image_preset
+            else:
+                color = best_theme_color(file)
+            # print(f"\n{file} : ", color)
+            data[filename] = (int(color[0]), int(color[1]), int(color[2]))
+        except Exception as e:
+            print(f"\n{file} : {e}")
+
+    with open(f"{path}/colorMap.json", 'w') as f:
+        json.dump(data, f)
+
+    print(f"Image extraction completed")
+
+
 # ----------------------------------------------------------
 # CLI
 # ----------------------------------------------------------
 
 if __name__ == "__main__":
-    import glob
-    import json
+    parser = argparse.ArgumentParser(description="ColorScheme")
 
-    files = glob.glob("*.png")
+    parser.add_argument("--path", type=str, default="Default", help="Image Paths")
+    args = parser.parse_args()
 
-    data = {}
-    for file in tqdm(files, desc="Extracting"):
-        try:
-            color = best_theme_color(file)
-            print(f"{file} : ", color)
-            data[file] = (int(color[0]), int(color[1]), int(color[2]))
-        except Exception as e:
-            print(f"{file} : {e}")
+    path = args.path
+    extract_image_scheme(path)
 
-    with open("../audiobooks/colorMap.json", 'w') as f:
-        json.dump(data, f)
+

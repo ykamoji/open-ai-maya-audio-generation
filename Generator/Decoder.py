@@ -12,7 +12,7 @@ from tqdm import tqdm
 from pathlib import Path
 from Emotions.utils import clear_cache, getDevice
 from Generator.utils import getSnacModel, batch_sentences
-from auto_tone_equalize import process_npy
+from PostProcess.auto_tone_equalize import process_npy
 
 CODE_END_TOKEN_ID = 128258
 CODE_TOKEN_OFFSET = 128266

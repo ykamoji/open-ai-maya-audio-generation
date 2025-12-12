@@ -336,7 +336,7 @@ def analyze(audio_path):
 
 if __name__ == "__main__":
 
-    audio = "output/audios/Blake (Chapter 30)/Blake (Chapter 30).m4a"
+    audio = "output/audios/David (Chapter 15)/David (Chapter 15)_processed.wav"
 
     analyze(audio)
 
