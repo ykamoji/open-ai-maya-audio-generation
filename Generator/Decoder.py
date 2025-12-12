@@ -319,7 +319,7 @@ if __name__ == '__main__':
     parser.add_argument("--path", type=str, default="/output", help="Audio Output Path")
     parser.add_argument("--modelPath", type=str, default="/models", help="Snac Model Path")
     parser.add_argument("--limits", type=json.loads, default=None, help="Range")
-    parser.add_argument("--createAudio", type=bool, default=True, help="Skip Audio")
+    parser.add_argument("--createAudio", action="store_true", help="Create Audio")
 
     args = parser.parse_args()
 
