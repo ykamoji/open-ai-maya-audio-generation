@@ -316,8 +316,8 @@ def getChapterNo(title):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="Decoding")
-    parser.add_argument("--path", type=str, default="/output", help="Audio Output Path")
-    parser.add_argument("--modelPath", type=str, default="/models", help="Snac Model Path")
+    parser.add_argument("--path", type=str, default="output", help="Audio Output Path")
+    parser.add_argument("--modelPath", type=str, default="models", help="Snac Model Path")
     parser.add_argument("--limits", type=json.loads, default=None, help="Range")
     parser.add_argument("--createAudio", action="store_true", help="Create Audio")
 
@@ -342,7 +342,7 @@ if __name__ == '__main__':
 
     files.sort(key=lambda x: getChapterNo(x))
     start = 0
-    end = len(files)
+    end = getChapterNo(files[-1])
     if limits:
         start = limits[0]
         end = limits[1]

@@ -114,8 +114,8 @@ def process_npy(input_path, output_wav, tempo=1.15):
     # run(cmd)
 
     try:
-        # os.remove(raw_wav)
-        # os.remove(processed_wav)
+        os.remove(raw_wav)
+        os.remove(processed_wav)
         os.remove(temp_m4a)
     except OSError:
         pass

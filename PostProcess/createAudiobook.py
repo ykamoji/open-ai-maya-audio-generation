@@ -1,9 +1,11 @@
 import os
 import glob
 import shutil
+import re
+import json
 import argparse
-
-from PostProcess.process_image_colors import extract_image_scheme
+from PostProcess.audio_extraction import extract_all_features, extract_audio_features
+from PostProcess.image_extraction import extract_image_data
 
 
 def move_audio_and_subtitle_files(source_base_path: str, destination_folder: str):
@@ -43,6 +45,21 @@ def move_audio_and_subtitle_files(source_base_path: str, destination_folder: str
     print(f"Successfully moved {moved_count} out of {len(files_to_move)} files to {destination_folder}")
 
 
+def getChapterNo(path):
+    return int(re.search(r'\d+', path).group())
+
+
+def create_audio_extraction_data(path):
+
+    audio_files = glob.glob(os.path.join(path, f"*.m4a"))
+    audio_files.sort(key=lambda x: getChapterNo(x))
+
+    srt_files = glob.glob(os.path.join(path, f"*.srt"))
+    srt_files.sort(key=lambda x: getChapterNo(x))
+
+    return audio_files, srt_files
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="ColorScheme")
@@ -55,7 +72,49 @@ if __name__ == "__main__":
 
     move_audio_and_subtitle_files(args.s, args.d)
 
-    extract_image_scheme(args.d)
+    audio_paths, srt_paths = create_audio_extraction_data(args.d)
+
+    metadata = {}
+
+    if os.path.isfile(f"{args.d}/metadata.json"):
+        with open(f"{args.d}/metadata.json") as f:
+            metadata = json.load(f)
+
+    processed_aud_paths = audio_paths[:]
+    processed_srt_paths = srt_paths[:]
+    for chapter in metadata:
+        for audio_path in audio_paths:
+            if chapter in os.path.splitext(os.path.basename(audio_path))[0]:
+                processed_aud_paths.remove(audio_path)
+
+        for srt_path in srt_paths:
+            if chapter in os.path.splitext(os.path.basename(srt_path))[0]:
+                processed_srt_paths.remove(srt_path)
+
+    # for (a, s) in prepared_data:
+    #     print(a, s)
+    #     audio_data = extract_audio_features(a, s)
+
+    if processed_aud_paths:
+        prepared_data = zip(processed_aud_paths, processed_srt_paths)
+
+        audio_data = extract_all_features(prepared_data)
+
+        for audio_name in audio_data:
+            metadata[audio_name] = audio_data[audio_name]
+
+        with open(f"{args.d}/metadata.json", 'w') as f:
+            json.dump(metadata, f, indent=2)
+
+    image_data = extract_image_data(args.d)
+
+    for image_name in image_data:
+        data = metadata.get(image_name, {})
+        data['scheme'] = image_data[image_name]
+        metadata[image_name] = data
+
+    with open(f"{args.d}/metadata.json", 'w') as f:
+        json.dump(metadata, f, indent=2)
 
 
 

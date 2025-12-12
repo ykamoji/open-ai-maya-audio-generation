@@ -12,7 +12,6 @@ import numpy as np
 import os
 import warnings
 import glob
-import json
 import argparse
 
 warnings.filterwarnings("ignore")
@@ -183,28 +182,28 @@ def best_theme_color(path):
     return max(candidates)[1]
 
 
-def extract_image_scheme(path):
+def extract_image_data(path):
 
     files = glob.glob(f"{path}/*.png")
 
-    data = {}
-    for file in tqdm(files, desc="Extracting"):
+    image_data = {}
+    for file in tqdm(files, desc="Image Extraction"):
         try:
-            filename = os.path.basename(file).split("/")[-1]
-            image_preset = presets.get(filename.split("/")[-1])
+            filename = os.path.basename(file).split("/")[-1].split(".").pop(0)
+            image_preset = presets.get(filename)
             if image_preset:
                 color = image_preset
             else:
                 color = best_theme_color(file)
             # print(f"\n{file} : ", color)
-            data[filename] = (int(color[0]), int(color[1]), int(color[2]))
+            image_data[filename] = [int(color[0]), int(color[1]), int(color[2])]
+
         except Exception as e:
             print(f"\n{file} : {e}")
 
-    with open(f"{path}/colorMap.json", 'w') as f:
-        json.dump(data, f)
+    print(f"Image extraction completed !")
 
-    print(f"Image extraction completed")
+    return image_data
 
 
 # ----------------------------------------------------------
@@ -218,6 +217,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     path = args.path
-    extract_image_scheme(path)
+    extract_image_data(path)
 
 
