@@ -77,6 +77,10 @@ def getChapterNo(title):
     return int(re.search(r'\d+', title).group())
 
 
+def getFileName(path):
+    return os.path.basename(path).split('_').pop(0)
+
+
 def create_backup(step, cache):
     updateCache(f'cache/backups/{step}.json', cache)
 

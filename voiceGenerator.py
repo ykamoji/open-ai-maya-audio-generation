@@ -9,7 +9,7 @@ from Emotions.emotionPlacement import insertEmotions
 from Emotions.postProcess import voice_post_process, emotion_det_post_process, emotion_inst_post_process
 from Emotions.sumerization import summarization
 from Emotions.utils import getModelAndTokenizer
-from utils import create_or_load_Cache, create_backup, getChapterNo
+from utils import create_or_load_Cache, create_backup, getChapterNo, getFileName
 from Emotions.stylize import stylize
 from Emotions.emotionDetection import detectEmotions
 from utils import CustomObject, get_yaml_loader, updateCache
@@ -343,7 +343,7 @@ class VoiceGenerator:
             sec_cache = nb_cache.setdefault(section_name, {})
             if not sec_cache:
                 raise Exception(f"You don't have any emotion lines to process for {notebook_name} {section_name}")
-            audio_chapters = [file for file in glob.glob(outputPath + "audios/*/*.npy") if "_meta" in file]
+            audio_chapters = [getFileName(file) for file in glob.glob(outputPath + "audios/*/*.npy") if "_meta" in file]
             contents_to_process = []
             for page in pages:
                 if page["title"] not in audio_chapters or self.checkInPageNums(page["title"]):
