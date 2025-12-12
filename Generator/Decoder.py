@@ -218,7 +218,7 @@ def write_srt(sentences, timeline, out_path):
         f.write(srt_output)
 
 
-def decode(device, generated_outputs, snac_model, audio_path, para_breaks, tagged_list, title):
+def decode(device, generated_outputs, snac_model, audio_path, para_breaks, tagged_list, title, createAudio):
     completed = True
     try:
         # learn silence frame
@@ -285,20 +285,22 @@ def decode(device, generated_outputs, snac_model, audio_path, para_breaks, tagge
         if not decoded_audio_available:
             np.save(os.path.join(audio_path, f"{title}_decoded.npy"), np.array(saved_decoded_audio, dtype=object))
 
-        saveAudio(audio_path, audio_frames, title)
+        # Audio generation logic. For more control over audio creation.
+        if createAudio:
+            saveAudio(audio_path, audio_frames, title)
 
-        process_npy(input_path=os.path.join(audio_path, f"{title}.npy"),
-                    output_wav=os.path.join(audio_path, f"{title}.wav"),
-                    tempo=speed_factor)
+            process_npy(input_path=os.path.join(audio_path, f"{title}.npy"),
+                        output_wav=os.path.join(audio_path, f"{title}.wav"),
+                        tempo=speed_factor)
 
-        timeline = [(s / speed_factor, e / speed_factor) for (s, e) in timeline]
+            timeline = [(s / speed_factor, e / speed_factor) for (s, e) in timeline]
 
-        write_srt(lines, timeline, os.path.join(audio_path, f"{title}.srt"))
+            write_srt(lines, timeline, os.path.join(audio_path, f"{title}.srt"))
 
-        try:
-            os.remove(os.path.join(audio_path, f"{title}.npy"))
-        except Exception:
-            pass
+            try:
+                os.remove(os.path.join(audio_path, f"{title}.npy"))
+            except Exception:
+                pass
 
     except Exception as e:
         print(f"Decoding error: {e}")
@@ -317,11 +319,14 @@ if __name__ == '__main__':
     parser.add_argument("--path", type=str, default="/output", help="Audio Output Path")
     parser.add_argument("--modelPath", type=str, default="/models", help="Snac Model Path")
     parser.add_argument("--limits", type=json.loads, default=None, help="Range")
+    parser.add_argument("--createAudio", type=bool, default=True, help="Skip Audio")
+
     args = parser.parse_args()
 
     path = args.path
     model_path = args.modelPath
     limits = args.limits
+    createAudio = args.createAudio
 
     if not os.path.isdir(path):
         raise Exception(f"{path} is not a directory. Check and give correct path.")
@@ -360,7 +365,8 @@ if __name__ == '__main__':
                            audio_path=audio_path,
                            para_breaks=para_breaks,
                            tagged_list=tagged_list,
-                           title=title)
+                           title=title,
+                           createAudio=createAudio)
         if completed:
             print(f"Decoding completed for {title} !")
 
