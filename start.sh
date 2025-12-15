@@ -29,6 +29,14 @@ while [[ "$#" -gt 0 ]]; do
       step="$2"
       shift 2
       ;;
+    --forceUpdate)
+      forceUpdate=true
+      shift
+      ;;
+    --correctVoice)
+      correctVoice=true
+      shift
+      ;;
     *)
       echo "Unknown argument: $1"
       shift
@@ -48,6 +56,8 @@ args2=()
 [[ -n "$genPgL" ]] && args2+=("--pageLimit" "$genPgL")
 [[ -n "$pageNums" ]] && args2+=("--pageNums" "$pageNums")
 [[ -n "$step" ]] && args2+=("--step" "$step")
+[[ "$forceUpdate" == true ]] && args2+=("--forceUpdate")
+[[ "$correctVoice" == true ]] && args2+=("--correctVoice")
 
 
 

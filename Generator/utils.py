@@ -1,8 +1,11 @@
+import os
+import json
 import torch
+import shutil
+from pathlib import Path
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from snac import SNAC
 import re
-
 from Generator.Dialogues import process
 
 pattern = r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<![A-Z]\.)(?<=\.)\s'
@@ -46,7 +49,6 @@ def getTokenizer(MODEL_NAME, CACHE_PATH, platform):
 
 
 def createChunks(content, limit=None):
-
     chunks = []
     paragraphs = [p.strip("\n").strip() for p in content.split("\n\n") if p.strip()]
     if limit is not None:
@@ -85,7 +87,7 @@ def batch_sentences(lines, limit=25):
     if len(broken_paras) > 0:
         print("\n\nBroken paragraphs.")
         for para in broken_paras:
-            print("\n" + para +"\n")
+            print("\n" + para + "\n")
 
     chunks.insert(0, lines[0])
     tagged_list.insert(0, False)
@@ -140,3 +142,95 @@ def paraChunks(paragraphs, limit):
             raise Exception(msg)
 
     return chunks
+
+
+def create_or_load_Cache(file):
+    CACHE = {}
+    if os.path.isfile(file):
+        with open(file) as f:
+            CACHE = json.load(f)
+    else:
+        Path(file).parent.mkdir(parents=True, exist_ok=True)
+        with open(file, 'w') as f:
+            json.dump(CACHE, f)
+    return CACHE
+
+
+def updateCache(file, data):
+    Path(file).parent.mkdir(parents=True, exist_ok=True)
+    with open(file, 'w') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def load_dialogues(notebook_name, section_name, page, force_update=False, correct_voice=False):
+    title = page['title']
+
+    file = f'cache/dialogues/{notebook_name}/{section_name}/primary/{title}.json'
+
+    DIALOGUE_CACHE = create_or_load_Cache(file)
+
+    if not DIALOGUE_CACHE or force_update:
+        chunks, tagged_list, para_breaks, broken_paras = batch_sentences(page['content'])
+
+        DIALOGUE_CACHE = {
+            "chunks": [{"part": i, "dialogue": chk, "updated": False} for i, chk in enumerate(chunks)],
+            "tagged_list": tagged_list,
+            "para_breaks": para_breaks,
+            "broken_paras": broken_paras
+        }
+
+    edit_present = False
+    if correct_voice:
+        ## Load the partial cache file, if present.
+        PARTIAL_CACHE = create_or_load_Cache(f'cache/dialogues/{notebook_name}/{section_name}/post/{title}.json')
+
+        if PARTIAL_CACHE:
+            edit_present = True
+            ## Create a backup for confirming and restoring.
+            updateCache(f'cache/backups/dialogues/{notebook_name}/{section_name}/{title}_original.json', DIALOGUE_CACHE)
+
+            ## Edit the dialogues from the edit file
+            update_voice_recreation(DIALOGUE_CACHE['chunks'], PARTIAL_CACHE["chunks"])
+
+    updateCache(file, DIALOGUE_CACHE)
+
+    return (
+        DIALOGUE_CACHE['chunks'],
+        DIALOGUE_CACHE['tagged_list'],
+        DIALOGUE_CACHE['para_breaks'],
+        DIALOGUE_CACHE['broken_paras'],
+        edit_present
+    )
+
+
+def move_edited_dialogues(Graph, page):
+    notebook_name = Graph.NotebookName
+    section_name = Graph.SectionName
+    title = page['title']
+
+    ## Update the updated fields of chunks to false so that run doesn't pick that again.
+    primary_file = f'cache/dialogues/{notebook_name}/{section_name}/primary/{title}.json'
+
+    primary = create_or_load_Cache(primary_file)
+    for chunk in primary["chunks"]:
+        chunk["updated"] = False
+
+    updateCache(primary_file, primary)
+
+    ## Move the edited files for confirmation
+    file = f'cache/dialogues/{notebook_name}/{section_name}/post/{title}.json'
+    to = f'cache/backups/dialogues/{notebook_name}/{section_name}/{title}.json'
+
+    src = Path(file)
+    dst = Path(to)
+
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(src), str(dst))
+
+
+def update_voice_recreation(chunks, partial_chunks):
+    for edit_chunks in partial_chunks:
+        modified_chunk = {
+            "part": int(edit_chunks['part']), "dialogue": edit_chunks['dialogue'], "updated": True
+        }
+        chunks[int(edit_chunks['part'])] = modified_chunk
