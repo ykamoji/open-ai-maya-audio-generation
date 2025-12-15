@@ -131,8 +131,6 @@ def convert(Args, pages, outputPath):
             if broken_paras:
                 continue
 
-            chunks = chunks[:5]
-
             ## when partial parts were interrupted from last session
             start = 0
             part_files = _gather_sorted_part_files(outputPath + "/audios/", page['title'])
