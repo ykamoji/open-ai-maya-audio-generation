@@ -196,7 +196,10 @@ def extract_image_data(path):
             else:
                 color = best_theme_color(file)
             # print(f"\n{file} : ", color)
-            image_data[filename] = [int(color[0]), int(color[1]), int(color[2])]
+            image_data[filename] = {
+                "scheme": [int(color[0]), int(color[1]), int(color[2])],
+                "dims": list(Image.open(file).size)
+            }
 
         except Exception as e:
             print(f"\n{file} : {e}")

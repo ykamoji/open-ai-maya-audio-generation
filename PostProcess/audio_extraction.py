@@ -177,7 +177,7 @@ def extract_audio_features(audio_path, srt_path):
             "pitch": round(avg_pitch_hz,2),
             "pitch_variability": round(pitch_variability,2),
             "loudness": round(avg_loudness_db,2),
-            "length": round(audio_length_sec, 2),
+            "duration": round(audio_length_sec, 2),
             "size": round(file_size_bytes / (1024 * 1024), 2),
             "prosody_index": round(prosody_index, 2),
         }
@@ -216,4 +216,5 @@ def extract_all_features(audio_srt_pairs, max_workers=8):
 
         pbar.close()
 
+    print(f"Audio extraction completed !")
     return results

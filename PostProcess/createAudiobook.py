@@ -74,7 +74,11 @@ if __name__ == "__main__":
 
     audio_paths, srt_paths = create_audio_extraction_data(args.d)
 
-    metadata = {}
+    metadata = {
+        "audiobook_progress":{},
+        "static":{},
+        "audiobook_playlists":[]
+    }
 
     if os.path.isfile(f"{args.d}/metadata.json"):
         with open(f"{args.d}/metadata.json") as f:
@@ -82,13 +86,13 @@ if __name__ == "__main__":
 
     processed_aud_paths = audio_paths[:]
     processed_srt_paths = srt_paths[:]
-    for chapter in metadata:
+    for chapter in metadata["static"]:
         for audio_path in audio_paths:
-            if chapter in os.path.splitext(os.path.basename(audio_path))[0]:
+            if chapter in os.path.splitext(os.path.basename(audio_path))[0] and "prosody_index" in metadata[chapter]:
                 processed_aud_paths.remove(audio_path)
 
         for srt_path in srt_paths:
-            if chapter in os.path.splitext(os.path.basename(srt_path))[0]:
+            if chapter in os.path.splitext(os.path.basename(srt_path))[0] and "speed" in metadata[chapter]:
                 processed_srt_paths.remove(srt_path)
 
     # for (a, s) in prepared_data:
@@ -101,7 +105,7 @@ if __name__ == "__main__":
         audio_data = extract_all_features(prepared_data)
 
         for audio_name in audio_data:
-            metadata[audio_name] = audio_data[audio_name]
+            metadata["static"][audio_name] = audio_data[audio_name]
 
         with open(f"{args.d}/metadata.json", 'w') as f:
             json.dump(metadata, f, indent=2)
@@ -109,9 +113,10 @@ if __name__ == "__main__":
     image_data = extract_image_data(args.d)
 
     for image_name in image_data:
-        data = metadata.get(image_name, {})
-        data['scheme'] = image_data[image_name]
-        metadata[image_name] = data
+        data = metadata["static"].get(image_name, {})
+        data['scheme'] = image_data[image_name]['scheme']
+        data['dims'] = image_data[image_name]['dims']
+        metadata["static"][image_name] = data
 
     with open(f"{args.d}/metadata.json", 'w') as f:
         json.dump(metadata, f, indent=2)
