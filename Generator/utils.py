@@ -162,10 +162,10 @@ def updateCache(file, data):
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-def load_dialogues(notebook_name, section_name, page, force_update=False, correct_voice=False):
+def load_dialogues(notebook_name, section_name, page, outputPath, force_update=False, correct_voice=False):
     title = page['title']
 
-    file = f'cache/dialogues/{notebook_name}/{section_name}/primary/{title}.json'
+    file = f'{outputPath}/dialogues/{notebook_name}/{section_name}/primary/{title}.json'
 
     DIALOGUE_CACHE = create_or_load_Cache(file)
 
@@ -182,7 +182,7 @@ def load_dialogues(notebook_name, section_name, page, force_update=False, correc
     edit_present = False
     if correct_voice:
         ## Load the partial cache file, if present.
-        PARTIAL_CACHE = create_or_load_Cache(f'cache/dialogues/{notebook_name}/{section_name}/post/{title}.json')
+        PARTIAL_CACHE = create_or_load_Cache(f'{outputPath}/dialogues/{notebook_name}/{section_name}/post/{title}.json')
 
         if PARTIAL_CACHE:
             edit_present = True
@@ -203,13 +203,13 @@ def load_dialogues(notebook_name, section_name, page, force_update=False, correc
     )
 
 
-def move_edited_dialogues(Graph, page):
+def move_edited_dialogues(Graph, page, outputPath):
     notebook_name = Graph.NotebookName
     section_name = Graph.SectionName
     title = page['title']
 
     ## Update the updated fields of chunks to false so that run doesn't pick that again.
-    primary_file = f'cache/dialogues/{notebook_name}/{section_name}/primary/{title}.json'
+    primary_file = f'{outputPath}/dialogues/{notebook_name}/{section_name}/primary/{title}.json'
 
     primary = create_or_load_Cache(primary_file)
     for chunk in primary["chunks"]:
@@ -218,7 +218,7 @@ def move_edited_dialogues(Graph, page):
     updateCache(primary_file, primary)
 
     ## Move the edited files for confirmation
-    file = f'cache/dialogues/{notebook_name}/{section_name}/post/{title}.json'
+    file = f'{outputPath}/dialogues/{notebook_name}/{section_name}/post/{title}.json'
     to = f'cache/backups/dialogues/{notebook_name}/{section_name}/{title}.json'
 
     src = Path(file)

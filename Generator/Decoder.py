@@ -216,7 +216,6 @@ def decode(device, generated_outputs, edited, snac_model, audio_path, para_break
         # process_npy(input_path=os.path.join(audio_path, f"{title + '_n'}.npy"),
         #             output_wav=os.path.join(audio_path, f"audiobook_{getChapter(title)}_n.npy"))
 
-        lines = getDialogues(title)
         silence_between_chunks = 0.20 / speed_factor
         tagged_silence = 0.30 / speed_factor
         paragraph_silence = 0.60 / speed_factor
@@ -266,6 +265,15 @@ def decode(device, generated_outputs, edited, snac_model, audio_path, para_break
             else:
                 np.save(os.path.join(audio_path, f"{title}_decoded_edited.npy"), np.array(saved_decoded_audio, dtype=object))
 
+        ## SRT file creation only if it's not present.
+        # Best to avoid losing old scripts or accidentally overriding on the latest.
+        # Instead, manually backup and delete old srt.
+        if not os.path.isfile(os.path.join(audio_path, f"{title}.srt")):
+            timeline = [(s / speed_factor, e / speed_factor) for (s, e) in timeline]
+
+            lines = getDialogues(title)
+            write_srt(lines, timeline, os.path.join(audio_path, f"{title}.srt"))
+
         # Audio generation logic. For more control over audio creation.
         if createAudio:
             saveAudio(audio_path, audio_frames, title)
@@ -273,10 +281,6 @@ def decode(device, generated_outputs, edited, snac_model, audio_path, para_break
             process_npy(input_path=os.path.join(audio_path, f"{title}.npy"),
                         output_wav=os.path.join(audio_path, f"{title}.wav"),
                         tempo=speed_factor)
-
-            timeline = [(s / speed_factor, e / speed_factor) for (s, e) in timeline]
-
-            write_srt(lines, timeline, os.path.join(audio_path, f"{title}.srt"))
 
             try:
                 os.remove(os.path.join(audio_path, f"{title}.npy"))

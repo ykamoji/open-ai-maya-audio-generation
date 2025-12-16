@@ -125,7 +125,7 @@ def convert(Args, pages, outputPath):
     for page in tqdm(pages, desc="Pages", ncols=120, position=0, file=sys.stdout):
         try:
             # chunks, tagged_list, para_breaks, broken_paras = batch_sentences(page['content'])
-            val = load_dialogues(Args.Graph.NotebookName, Args.Graph.SectionName, page, Args.forceUpdate, Args.correctVoice)
+            val = load_dialogues(Args.Graph.NotebookName, Args.Graph.SectionName, page, outputPath, Args.forceUpdate, Args.correctVoice)
             chunks, tagged_list, para_breaks, broken_paras, edit_present = val
 
             if broken_paras:
@@ -161,7 +161,7 @@ def convert(Args, pages, outputPath):
             processed += 1
 
             if edit_present:
-                move_edited_dialogues(Args.Graph, page)
+                move_edited_dialogues(Args.Graph, page, outputPath)
 
         except Exception as e:
             print(f"Exception: {e}. Skipping {page['title']}")
