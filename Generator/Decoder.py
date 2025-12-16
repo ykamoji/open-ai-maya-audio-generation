@@ -1,3 +1,5 @@
+from copyreg import pickle
+
 import torch
 import os
 import re
@@ -9,9 +11,9 @@ import numpy as np
 import glob
 import argparse
 from tqdm import tqdm
-from pathlib import Path
+from collections import defaultdict
 from Emotions.utils import clear_cache, getDevice
-from Generator.utils import getSnacModel, batch_sentences
+from Generator.utils import getSnacModel, load_dialogues
 from PostProcess.auto_tone_equalize import process_npy
 
 CODE_END_TOKEN_ID = 128258
@@ -156,47 +158,23 @@ def assemble_snac_segments_and_stitch(
     return final_codes
 
 
-def save_snac_tokens(generated_outputs, audio_path, para_breaks, tagged_list, title):
-    completed = True
-    try:
-        data = {
-            "chunks": generated_outputs,
-            "para_breaks": para_breaks,
-            "tagged_list": tagged_list,
-        }
-        Path(audio_path).mkdir(parents=True, exist_ok=True)
-        if not os.path.isfile(os.path.join(audio_path, f"{title}_meta.npy")):
-            np.save(os.path.join(audio_path, f"{title}_meta.npy"), data)
-        else:
-            nxt = 1
-            while True:
-                if not os.path.isfile(os.path.join(audio_path, f"{title}_{nxt}_meta.npy")):
-                    np.save(os.path.join(audio_path, f"{title}_meta_{nxt}.npy"), data)
-                    break
-                nxt += 1
-
-    except Exception as e:
-        print(f"Saving snac tokens meta data error: {e}")
-        completed = False
-
-    return completed
-
-
 def getDialogues(title):
 
     with open("cache/emotionCache.json") as f:
         data = json.load(f)
 
-    lines = []
+    nb, sec, content = "", "", {}
     for notebook in data:
         for section in data[notebook]:
             for page in data[notebook][section]:
                 if title in page:
-                    lines = data[notebook][section][page]
+                    content = data[notebook][section][title]
+                    nb = notebook
+                    sec = section
                     break
 
-    audio_lines, _, _, _ = batch_sentences(lines)
-    return audio_lines
+    audio_lines, _, _, _, _ = load_dialogues(nb, sec, {"title":title, "content":content})
+    return [aud["dialogue"] for aud in audio_lines]
 
 
 def write_srt(sentences, timeline, out_path):
@@ -218,7 +196,7 @@ def write_srt(sentences, timeline, out_path):
         f.write(srt_output)
 
 
-def decode(device, generated_outputs, snac_model, audio_path, para_breaks, tagged_list, title, createAudio):
+def decode(device, generated_outputs, edited, snac_model, audio_path, para_breaks, tagged_list, title, createAudio):
     completed = True
     try:
         # learn silence frame
@@ -228,7 +206,7 @@ def decode(device, generated_outputs, snac_model, audio_path, para_breaks, tagge
         samples_per_frame = 2048
 
         # speed up
-        speed_factor = 1.25
+        speed_factor = 1.45
 
         # audio_frames = []
         # for gen_out in tqdm(generated_outputs, desc=f"Normal", ncols=100, file=sys.stdout):
@@ -238,7 +216,6 @@ def decode(device, generated_outputs, snac_model, audio_path, para_breaks, tagge
         # process_npy(input_path=os.path.join(audio_path, f"{title + '_n'}.npy"),
         #             output_wav=os.path.join(audio_path, f"audiobook_{getChapter(title)}_n.npy"))
 
-        lines = getDialogues(title)
         silence_between_chunks = 0.20 / speed_factor
         tagged_silence = 0.30 / speed_factor
         paragraph_silence = 0.60 / speed_factor
@@ -254,7 +231,7 @@ def decode(device, generated_outputs, snac_model, audio_path, para_breaks, tagge
         audio_frames = []
         saved_decoded_audio = []
         decoded_audio_available = True
-        if os.path.isfile(os.path.join(audio_path, f"{title}_decoded.npy")):
+        if os.path.isfile(os.path.join(audio_path, f"{title}_decoded.npy")) and not edited:
             saved_decoded_audio = np.load(os.path.join(audio_path, f"{title}_decoded.npy"), allow_pickle=True).tolist()
         else:
             decoded_audio_available = False
@@ -262,7 +239,7 @@ def decode(device, generated_outputs, snac_model, audio_path, para_breaks, tagge
         timeline = []
         t = 0.0
         i = 0
-        for (type, gen_out) in tqdm(final_codes, desc=f"{title}", ncols=100, file=sys.stdout):
+        for part, (type, gen_out) in tqdm(enumerate(final_codes), desc=f"{title}", ncols=100, file=sys.stdout):
             if decoded_audio_available:
                 decoded = saved_decoded_audio[i]
             else:
@@ -283,7 +260,19 @@ def decode(device, generated_outputs, snac_model, audio_path, para_breaks, tagge
                 saved_decoded_audio.append(decoded)
 
         if not decoded_audio_available:
-            np.save(os.path.join(audio_path, f"{title}_decoded.npy"), np.array(saved_decoded_audio, dtype=object))
+            if not edited:
+                np.save(os.path.join(audio_path, f"{title}_decoded.npy"), np.array(saved_decoded_audio, dtype=object))
+            else:
+                np.save(os.path.join(audio_path, f"{title}_decoded_edited.npy"), np.array(saved_decoded_audio, dtype=object))
+
+        ## SRT file creation only if it's not present.
+        # Best to avoid losing old scripts or accidentally overriding on the latest.
+        # Instead, manually backup and delete old srt.
+        if not os.path.isfile(os.path.join(audio_path, f"{title}.srt")):
+            timeline = [(s / speed_factor, e / speed_factor) for (s, e) in timeline]
+
+            lines = getDialogues(title)
+            write_srt(lines, timeline, os.path.join(audio_path, f"{title}.srt"))
 
         # Audio generation logic. For more control over audio creation.
         if createAudio:
@@ -293,12 +282,9 @@ def decode(device, generated_outputs, snac_model, audio_path, para_breaks, tagge
                         output_wav=os.path.join(audio_path, f"{title}.wav"),
                         tempo=speed_factor)
 
-            timeline = [(s / speed_factor, e / speed_factor) for (s, e) in timeline]
-
-            write_srt(lines, timeline, os.path.join(audio_path, f"{title}.srt"))
-
             try:
                 os.remove(os.path.join(audio_path, f"{title}.npy"))
+
             except Exception:
                 pass
 
@@ -313,53 +299,66 @@ def getChapterNo(title):
     return int(re.search(r'\d+', title).group())
 
 
-if __name__ == '__main__':
+def getPartNo(file):
+    return int(re.search(r'\d+', file).group())
 
-    parser = argparse.ArgumentParser(description="Decoding")
-    parser.add_argument("--path", type=str, default="output", help="Audio Output Path")
-    parser.add_argument("--modelPath", type=str, default="models", help="Snac Model Path")
-    parser.add_argument("--limits", type=json.loads, default=None, help="Range")
-    parser.add_argument("--createAudio", action="store_true", help="Create Audio")
 
-    args = parser.parse_args()
+def create_npy_map(edits, allow_pickle=False):
+    return {
+        getPartNo(os.path.basename(edit)): np.load(edit, allow_pickle=allow_pickle)
+        for edit in edits
+    }
 
-    path = args.path
-    model_path = args.modelPath
-    limits = args.limits
-    createAudio = args.createAudio
 
-    if not os.path.isdir(path):
-        raise Exception(f"{path} is not a directory. Check and give correct path.")
+def edited_generated_tokens(generated_outputs, edits, title):
 
-    if not os.path.isdir(model_path):
-        raise Exception(f"{model_path} is not a directory. Check and give correct path.")
+    if edits:
+        print(f"{title} has edited parts. Combining with the decoded parts.")
+        for part_id, edited_tokens in create_npy_map(edits).items():
+            generated_outputs[part_id] = edited_tokens
 
+    return generated_outputs
+
+
+def gather_files(path):
     files = [file for file in glob.glob(os.path.join(path, f"audios/*/*.npy")) if "_meta" in file]
+    edits = defaultdict(list)
+    for file in glob.glob(os.path.join(path, "audios/*/*.npy")):
+        if "edited_" in file:
+            parent = os.path.basename(os.path.dirname(file))
+            edits[parent].append(file)
+    edits = dict(edits)
 
+    files.sort(key=lambda x: getChapterNo(x))
+
+    return files, edits
+
+
+def process(path, model_path, limits, createAudio):
+    files, edits = gather_files(path)
     snac_model = getSnacModel(model_path)
     device = 'cuda:0' if torch.cuda.is_available() else getDevice()
     snac_model.to(device)
-
-    files.sort(key=lambda x: getChapterNo(x))
     start = 0
     end = getChapterNo(files[-1])
     if limits:
         start = limits[0]
         end = limits[1]
-
     for file in files:
         currentChapter = getChapterNo(file)
         if not start <= currentChapter <= end:
             continue
-
         title = os.path.split(file)[-1].split("_")[0]
         audio_path = os.path.split(file)[-2]
         data = np.load(file, allow_pickle=True)
         data = data.item()
-        generated_outputs = data["chunks"]
+        if title not in edits:
+            edits[title] = []
+        generated_outputs = edited_generated_tokens(data["chunks"], edits[title], title)
         para_breaks = data["para_breaks"]
         tagged_list = data["tagged_list"]
         completed = decode(device=device,
+                           edited=len(edits[title]) > 0,
                            generated_outputs=generated_outputs,
                            snac_model=snac_model,
                            audio_path=audio_path,
@@ -372,6 +371,66 @@ if __name__ == '__main__':
 
         else:
             print(f"Error for {title}. Check error logs.")
+
+
+def merge_files(path):
+    files, edits = gather_files(path)
+    file_map = create_npy_map(files, allow_pickle=True)
+    if edits:
+        for title, partials in edits.items():
+            try:
+                meta = file_map[getChapterNo(title)]
+                meta = meta.item()
+                for partial in partials:
+                    meta["chunks"][getPartNo(os.path.basename(partial))] = np.load(partial)
+                parent = os.path.join(path, f"audios/{title}/")
+                print(f"Deleting old {title}_meta.npy")
+                os.remove(os.path.join(parent, f"{title}_meta.npy"))
+                print(f"Saving new {title}_meta.npy")
+                np.save(os.path.join(parent, f"{title}_meta.npy"), meta)
+                partial_names = [os.path.basename(partial) for partial in partials]
+                print(f"Deleting {title} {partial_names}")
+                for partial in partials:
+                    os.remove(partial)
+                print(f"Deleting old {title}_decoded.npy")
+                os.remove(os.path.join(parent, f"{title}_decoded.npy"))
+                os.rename(os.path.join(parent, f"{title}_decoded_edited.npy"),
+                          os.path.join(parent, f"{title}_decoded.npy"))
+                print(f"Saving new {title}_decoded.npy")
+
+            except Exception as e:
+                print(f"Error for merging data for {title}. {e}")
+
+
+
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(description="Decoding")
+    parser.add_argument("--path", type=str, default="output", help="Audio Output Path")
+    parser.add_argument("--modelPath", type=str, default="models", help="Snac Model Path")
+    parser.add_argument("--limits", type=json.loads, default=None, help="Chapter Range")
+    parser.add_argument("--createAudio", action="store_true", help="Create Audio")
+    parser.add_argument("--merge", action="store_true", help="Create Audio")
+
+    args = parser.parse_args()
+
+    path = args.path
+    model_path = args.modelPath
+    limits = args.limits
+    createAudio = args.createAudio
+    merge = args.merge
+
+    if not os.path.isdir(path):
+        raise Exception(f"{path} is not a directory. Check and give correct path.")
+
+    if not os.path.isdir(model_path):
+        raise Exception(f"{model_path} is not a directory. Check and give correct path.")
+
+    if merge:
+        merge_files(path)
+    else:
+        process(path, model_path, limits, createAudio)
 
     ## TO check part voices
     # gen_out = np.load("output/audios/part_5.npy")

@@ -45,6 +45,43 @@ def move_audio_and_subtitle_files(source_base_path: str, destination_folder: str
     print(f"Successfully moved {moved_count} out of {len(files_to_move)} files to {destination_folder}")
 
 
+def read_chapter_intro(srt_path):
+    with open(srt_path, "r", encoding="utf-8") as file:
+        lines = file.readlines()
+
+    subtitle_lines = []
+    collecting = False
+
+    for line in lines:
+        line = line.strip()
+
+        # Skip index and timestamp lines
+        if not line:
+            if collecting:
+                break
+            continue
+        if "-->" in line or line.isdigit():
+            continue
+
+        collecting = True
+        subtitle_lines.append(line)
+
+    return " ".join(subtitle_lines)
+
+
+def get_audio_titles(path):
+
+    intro_map = {}
+
+    srt_files = glob.glob(os.path.join(path, f"*.srt"))
+    srt_files.sort(key=lambda x: getChapterNo(x))
+
+    for srt_file in srt_files:
+        intro_map[os.path.splitext(os.path.basename(srt_file))[0]] = read_chapter_intro(srt_file)
+
+    return intro_map
+
+
 def getChapterNo(path):
     return int(re.search(r'\d+', path).group())
 
@@ -88,11 +125,11 @@ if __name__ == "__main__":
     processed_srt_paths = srt_paths[:]
     for chapter in metadata["static"]:
         for audio_path in audio_paths:
-            if chapter in os.path.splitext(os.path.basename(audio_path))[0] and "prosody_index" in metadata[chapter]:
+            if chapter in os.path.splitext(os.path.basename(audio_path))[0] and "prosody_index" in metadata["static"][chapter]:
                 processed_aud_paths.remove(audio_path)
 
         for srt_path in srt_paths:
-            if chapter in os.path.splitext(os.path.basename(srt_path))[0] and "speed" in metadata[chapter]:
+            if chapter in os.path.splitext(os.path.basename(srt_path))[0] and "speed" in metadata["static"][chapter]:
                 processed_srt_paths.remove(srt_path)
 
     # for (a, s) in prepared_data:
@@ -117,6 +154,12 @@ if __name__ == "__main__":
         data['scheme'] = image_data[image_name]['scheme']
         data['dims'] = image_data[image_name]['dims']
         metadata["static"][image_name] = data
+
+    intro_data = get_audio_titles(args.d)
+    for title in intro_data:
+        data = metadata["static"].get(title, {})
+        data['intro'] = intro_data[title]
+        metadata["static"][title] = data
 
     with open(f"{args.d}/metadata.json", 'w') as f:
         json.dump(metadata, f, indent=2)

@@ -41,6 +41,8 @@ class VoiceGenerator:
         parser.add_argument("--pageLimit", type=json.loads, default=[None, None], help="PageLimit")
         parser.add_argument("--pageNums", type=json.loads, default=None, help="List of Page Numbers to run")
         parser.add_argument("--steps", type=json.loads, default=[0], help="Step definition")
+        parser.add_argument("--forceUpdate", action="store_true", help="Update Dialogues during voice generation")
+        parser.add_argument("--correctVoice", action="store_true", help="Post processing part voice recreation")
         args = parser.parse_args()
 
         with open('default.yaml', 'r') as file:
@@ -56,12 +58,17 @@ class VoiceGenerator:
         self.PageNums = self.Args.Generator.PageNums
         self.PageNums = args.pageNums if args.pageNums else self.PageNums
 
+        ## Voce Generation args
+        self.Args.forceUpdate = args.forceUpdate
+        self.Args.correctVoice = args.correctVoice
+
         with open('cache/contentCache.json') as f:
             self.CONTENT_CACHE = json.load(f)
 
         self.TITLE_CACHE = create_or_load_Cache('cache/titleCache.json')
         self.VOICE_CACHE = create_or_load_Cache('cache/voiceCache.json')
         self.EMOTION_CACHE = create_or_load_Cache('cache/emotionCache.json')
+
         for backup in ['detection', 'detection_post', 'insertion']:
             create_or_load_Cache(f'cache/backups/{backup}.json')
 
