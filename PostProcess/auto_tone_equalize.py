@@ -25,7 +25,7 @@ EQ_STR = (
 
 )
 
-LIMITER_STR = "loudnorm=I=-19.4:TP=-3.0:LRA=11"
+LIMITER_STR = "loudnorm=I=-19.0:TP=-1.0:LRA=10"
 #
 # LIMITER_STR = "loudnorm=I=-17:TP=-1.5:LRA=6"
 

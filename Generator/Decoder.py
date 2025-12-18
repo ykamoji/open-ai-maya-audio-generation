@@ -1,5 +1,4 @@
-from copyreg import pickle
-
+from pathlib import Path
 import torch
 import os
 import re
@@ -13,7 +12,7 @@ import argparse
 from tqdm import tqdm
 from collections import defaultdict
 from Emotions.utils import clear_cache, getDevice
-from Generator.utils import getSnacModel, load_dialogues
+from Generator.utils import getSnacModel
 from PostProcess.auto_tone_equalize import process_npy
 
 CODE_END_TOKEN_ID = 128258
@@ -158,23 +157,17 @@ def assemble_snac_segments_and_stitch(
     return final_codes
 
 
-def getDialogues(title):
+def getDialogues(title, output_path):
+    try:
+        dialogues = glob.glob(os.path.join(output_path, f"dialogues/*/*/primary/{title}.json"))[0]
 
-    with open("cache/emotionCache.json") as f:
-        data = json.load(f)
+        with open(dialogues) as f:
+            audio_data = json.load(f)
 
-    nb, sec, content = "", "", {}
-    for notebook in data:
-        for section in data[notebook]:
-            for page in data[notebook][section]:
-                if title in page:
-                    content = data[notebook][section][title]
-                    nb = notebook
-                    sec = section
-                    break
-
-    audio_lines, _, _, _, _ = load_dialogues(nb, sec, {"title":title, "content":content})
-    return [aud["dialogue"] for aud in audio_lines]
+        return [audio_line["dialogue"] for audio_line in audio_data["chunks"]] if "chunks" in audio_data else []
+    except Exception as e:
+        print(f"Error in loading dialogues: {e}")
+        return []
 
 
 def write_srt(sentences, timeline, out_path):
@@ -196,7 +189,7 @@ def write_srt(sentences, timeline, out_path):
         f.write(srt_output)
 
 
-def decode(device, generated_outputs, edited, snac_model, audio_path, para_breaks, tagged_list, title, createAudio):
+def decode(device, generated_outputs, edited, snac_model, output_path, audio_path, para_breaks, tagged_list, title, createAudio):
     completed = True
     try:
         # learn silence frame
@@ -206,7 +199,7 @@ def decode(device, generated_outputs, edited, snac_model, audio_path, para_break
         samples_per_frame = 2048
 
         # speed up
-        speed_factor = 1.45
+        speed_factor = 1.3
 
         # audio_frames = []
         # for gen_out in tqdm(generated_outputs, desc=f"Normal", ncols=100, file=sys.stdout):
@@ -271,7 +264,7 @@ def decode(device, generated_outputs, edited, snac_model, audio_path, para_break
         if not os.path.isfile(os.path.join(audio_path, f"{title}.srt")):
             timeline = [(s / speed_factor, e / speed_factor) for (s, e) in timeline]
 
-            lines = getDialogues(title)
+            lines = getDialogues(title, output_path)
             write_srt(lines, timeline, os.path.join(audio_path, f"{title}.srt"))
 
         # Audio generation logic. For more control over audio creation.
@@ -357,10 +350,12 @@ def process(path, model_path, limits, createAudio):
         generated_outputs = edited_generated_tokens(data["chunks"], edits[title], title)
         para_breaks = data["para_breaks"]
         tagged_list = data["tagged_list"]
+        getDialogues(title, path)
         completed = decode(device=device,
                            edited=len(edits[title]) > 0,
                            generated_outputs=generated_outputs,
                            snac_model=snac_model,
+                           output_path=path,
                            audio_path=audio_path,
                            para_breaks=para_breaks,
                            tagged_list=tagged_list,

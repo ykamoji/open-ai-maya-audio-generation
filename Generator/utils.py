@@ -187,7 +187,7 @@ def load_dialogues(notebook_name, section_name, page, outputPath, force_update=F
         if PARTIAL_CACHE:
             edit_present = True
             ## Create a backup for confirming and restoring.
-            updateCache(f'cache/backups/dialogues/{notebook_name}/{section_name}/{title}_original.json', DIALOGUE_CACHE)
+            updateCache(f'{outputPath}/backups/dialogues/{notebook_name}/{section_name}/{title}_original.json', DIALOGUE_CACHE)
 
             ## Edit the dialogues from the edit file
             update_voice_recreation(DIALOGUE_CACHE['chunks'], PARTIAL_CACHE["chunks"])
@@ -219,7 +219,7 @@ def move_edited_dialogues(Graph, page, outputPath):
 
     ## Move the edited files for confirmation
     file = f'{outputPath}/dialogues/{notebook_name}/{section_name}/post/{title}.json'
-    to = f'cache/backups/dialogues/{notebook_name}/{section_name}/{title}.json'
+    to = f'{outputPath}/backups/dialogues/{notebook_name}/{section_name}/{title}.json'
 
     src = Path(file)
     dst = Path(to)
