@@ -226,6 +226,8 @@ def decode(device, generated_outputs, edited, snac_model, output_path, audio_pat
         decoded_audio_available = True
         if os.path.isfile(os.path.join(audio_path, f"{title}_decoded.npy")) and not edited:
             saved_decoded_audio = np.load(os.path.join(audio_path, f"{title}_decoded.npy"), allow_pickle=True).tolist()
+        elif not edited and os.path.isfile(os.path.join(audio_path, f"{title}_decoded_edited.npy")):
+            saved_decoded_audio = np.load(os.path.join(audio_path, f"{title}_decoded_edited.npy"), allow_pickle=True).tolist()
         else:
             decoded_audio_available = False
 
@@ -350,7 +352,6 @@ def process(path, model_path, limits, createAudio):
         generated_outputs = edited_generated_tokens(data["chunks"], edits[title], title)
         para_breaks = data["para_breaks"]
         tagged_list = data["tagged_list"]
-        getDialogues(title, path)
         completed = decode(device=device,
                            edited=len(edits[title]) > 0,
                            generated_outputs=generated_outputs,
