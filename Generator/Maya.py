@@ -376,34 +376,42 @@ def gpu_worker(gpu_id, MODEL_NAME, CACHE_PATH, platform, task_q, metrics_q, outp
             break
         prompt_input, is_tagged, part_id, updated = item
 
-        if edit_present and not updated:
-            continue
-
-        try:
-            generated_tokens, meta = processVoice(model, tokenizer, prompt_input, is_tagged, part_id)
-            Path(outputPath).mkdir(parents=True, exist_ok=True)
-            if edit_present:
-                np.save(outputPath + f"edited_{part_id}.npy", generated_tokens)
-            else:
-                np.save(outputPath + f"part_{part_id}.npy", generated_tokens)
-
+        if not edit_present or updated:
             try:
-                del generated_tokens
-            except Exception:
-                pass
+                generated_tokens, meta = processVoice(model, tokenizer, prompt_input, is_tagged, part_id)
+                Path(outputPath).mkdir(parents=True, exist_ok=True)
+                if edit_present:
+                    np.save(outputPath + f"edited_{part_id}.npy", generated_tokens)
+                else:
+                    np.save(outputPath + f"part_{part_id}.npy", generated_tokens)
 
+                try:
+                    del generated_tokens
+                except Exception:
+                    pass
+
+                metric = {
+                    "idx": part_id,
+                    "text_len": len(prompt_input["input_ids"][0]),
+                    "generation_time": meta[0],
+                    "audio_duration": meta[1],
+                    "rtf": meta[2],
+                    "tps": meta[3],
+                }
+                metrics_q.put(metric)
+
+            except Exception as e:
+                metrics_q.put({"idx": part_id, "error": str(e)})
+        else:
             metric = {
                 "idx": part_id,
                 "text_len": len(prompt_input["input_ids"][0]),
-                "generation_time": meta[0],
-                "audio_duration": meta[1],
-                "rtf": meta[2],
-                "tps": meta[3],
+                "generation_time": 0,
+                "audio_duration": 0,
+                "rtf": 0,
+                "tps": 0,
             }
             metrics_q.put(metric)
-
-        except Exception as e:
-            metrics_q.put({"idx": part_id, "error": str(e)})
 
 
 def idx_from_name(p):
@@ -450,6 +458,8 @@ def metric_worker(metrics_q, outputPath, title, done_event, start, total_parts, 
                 writer.add_scalar("Evaluation/InputSize", metric.get("text_len", 0), step)
                 writer.add_scalar("Evaluation/AudioDuration", metric.get("audio_duration", 0), step)
                 writer.add_scalar("Performance/GenerationTime", metric.get("generation_time", 0), step)
+                writer.add_scalar("Performance/RTF", metric.get("rtf", 0), step)
+                writer.add_scalar("Performance/TPS", metric.get("tps", 0), step)
                 try:
                     corr = float(np.corrcoef(input_lengths, generation_times)[0, 1]) if len(
                         input_lengths) >= 2 else 0.0
