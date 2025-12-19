@@ -125,7 +125,8 @@ def convert(Args, pages, outputPath):
     for page in tqdm(pages, desc="Pages", ncols=120, position=0, file=sys.stdout):
         try:
             # chunks, tagged_list, para_breaks, broken_paras = batch_sentences(page['content'])
-            val = load_dialogues(Args.Graph.NotebookName, Args.Graph.SectionName, page, outputPath, Args.forceUpdate, Args.correctVoice)
+            val = load_dialogues(Args.Graph.NotebookName, Args.Graph.SectionName, page, outputPath, Args.forceUpdate,
+                                 Args.correctVoice)
             chunks, tagged_list, para_breaks, broken_paras, edit_present = val
 
             if broken_paras:
@@ -201,7 +202,8 @@ def processVoice(model, tokenizer, prompt_input, is_tagged, part):
             generated_tokens = outputs[0, prompt_input['input_ids'].shape[1]:].tolist()
             if CODE_END_TOKEN_ID not in generated_tokens:
                 max_new_tokens += 500
-                print(f"\nPart {part} ({len(prompt_input['input_ids'][0])}). EOS token not found. Trying again with {max_new_tokens}\n")
+                print(
+                    f"\nPart {part} ({len(prompt_input['input_ids'][0])}). EOS token not found. Trying again with {max_new_tokens}\n")
                 del outputs
                 del generated_tokens
             else:
@@ -237,7 +239,8 @@ def singleProcess(model, tokenizer, outputPath, para_breaks, tagged_list, inputs
     model = model.to(getDevice())
     audio_path = outputPath + f"audios/{title}/"
     Path(audio_path).mkdir(parents=True, exist_ok=True)
-    for prompt_input, is_tagged, part_id, updated in tqdm(inputs, desc=f"{title}", ncols=90, position=1, file=sys.stdout, initial=start):
+    for prompt_input, is_tagged, part_id, updated in tqdm(inputs, desc=f"{title}", ncols=90, position=1,
+                                                          file=sys.stdout, initial=start):
 
         # print(f"Voice generation for part {step}/{total} ...")
 
@@ -245,7 +248,8 @@ def singleProcess(model, tokenizer, outputPath, para_breaks, tagged_list, inputs
         if edit_present and not updated:
             continue
 
-        generated_ids, (generation_time, audio_duration, rtf, tps) = processVoice(model, tokenizer, prompt_input, is_tagged, part_id)
+        generated_ids, (generation_time, audio_duration, rtf, tps) = processVoice(model, tokenizer, prompt_input,
+                                                                                  is_tagged, part_id)
         if edit_present:
             np.save(audio_path + f"edited_{part_id}.npy", generated_ids)
         else:
@@ -277,7 +281,6 @@ def singleProcess(model, tokenizer, outputPath, para_breaks, tagged_list, inputs
 
 def multiGPU(GPUCount, MODEL_NAME, CACHE_PATH, platform, outputPath, para_breaks, tagged_list,
              inputs, start, edit_present, title):
-
     task_q = mp.Queue()
     metrics_q = mp.Queue()
     done_event = mp.Event()
@@ -439,7 +442,8 @@ def metric_worker(metrics_q, outputPath, title, done_event, start, total_parts, 
     received = 0
     errors = 0
     recent = deque(maxlen=1000)
-    pbar = tqdm(total=total_parts, desc=f"{title}", ncols=90, position=1, file=sys.stdout, initial=start)
+    pbar = tqdm(total=total_parts, desc=f"{title}", ncols=90, position=1, file=sys.stdout)
+    if start > 0: pbar.update(start)
     while True:
         try:
             metric = metrics_q.get(timeout=1.0)
