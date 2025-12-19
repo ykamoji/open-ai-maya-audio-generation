@@ -159,9 +159,12 @@ def assemble_snac_segments_and_stitch(
 
 def getDialogues(title, output_path):
     try:
-        dialogues = glob.glob(os.path.join(output_path, f"dialogues/*/*/primary/{title}.json"))[0]
+        dialogues = glob.glob(os.path.join(output_path, f"dialogues/*/*/primary/{title}.json"))
 
-        with open(dialogues) as f:
+        if not dialogues or not os.path.isfile(dialogues[0]):
+            raise FileNotFoundError(f"{title} dialogues not found")
+
+        with open(dialogues[0]) as f:
             audio_data = json.load(f)
 
         return [audio_line["dialogue"] for audio_line in audio_data["chunks"]] if "chunks" in audio_data else []
@@ -189,7 +192,9 @@ def write_srt(sentences, timeline, out_path):
         f.write(srt_output)
 
 
-def decode(device, generated_outputs, edited, snac_model, output_path, audio_path, para_breaks, tagged_list, title, createAudio):
+def decode(device, generated_outputs, edited, snac_model, output_path, audio_path,
+           para_breaks, tagged_list, title, speed_up, createSrt, createAudio):
+
     completed = True
     try:
         # learn silence frame
@@ -197,9 +202,6 @@ def decode(device, generated_outputs, edited, snac_model, output_path, audio_pat
 
         # true frame size
         samples_per_frame = 2048
-
-        # speed up
-        speed_factor = 1.3
 
         # audio_frames = []
         # for gen_out in tqdm(generated_outputs, desc=f"Normal", ncols=100, file=sys.stdout):
@@ -209,9 +211,9 @@ def decode(device, generated_outputs, edited, snac_model, output_path, audio_pat
         # process_npy(input_path=os.path.join(audio_path, f"{title + '_n'}.npy"),
         #             output_wav=os.path.join(audio_path, f"audiobook_{getChapter(title)}_n.npy"))
 
-        silence_between_chunks = 0.20 / speed_factor
-        tagged_silence = 0.30 / speed_factor
-        paragraph_silence = 0.60 / speed_factor
+        silence_between_chunks = 0.20 / speed_up
+        tagged_silence = 0.30 / speed_up
+        paragraph_silence = 0.60 / speed_up
 
         final_codes = assemble_snac_segments_and_stitch(generated_outputs,
                                                         silence_frame,
@@ -234,7 +236,7 @@ def decode(device, generated_outputs, edited, snac_model, output_path, audio_pat
         timeline = []
         t = 0.0
         i = 0
-        for part, (type, gen_out) in tqdm(enumerate(final_codes), desc=f"{title}", ncols=100, file=sys.stdout):
+        for part, (type, gen_out) in enumerate(tqdm(final_codes, desc=f"{title}", ncols=100, file=sys.stdout)):
             if decoded_audio_available:
                 decoded = saved_decoded_audio[i]
             else:
@@ -260,12 +262,11 @@ def decode(device, generated_outputs, edited, snac_model, output_path, audio_pat
             else:
                 np.save(os.path.join(audio_path, f"{title}_decoded_edited.npy"), np.array(saved_decoded_audio, dtype=object))
 
-        ## SRT file creation only if it's not present.
+        ## SRT file creation only if it's not present or you when you want to override it.
         # Best to avoid losing old scripts or accidentally overriding on the latest.
-        # Instead, manually backup and delete old srt.
-        if not os.path.isfile(os.path.join(audio_path, f"{title}.srt")):
-            timeline = [(s / speed_factor, e / speed_factor) for (s, e) in timeline]
-
+        # Instead, manually backup or delete existing srt, or want to force update it.
+        if createSrt or not os.path.isfile(os.path.join(audio_path, f"{title}.srt")):
+            timeline = [(s / speed_up, e / speed_up) for (s, e) in timeline]
             lines = getDialogues(title, output_path)
             write_srt(lines, timeline, os.path.join(audio_path, f"{title}.srt"))
 
@@ -275,7 +276,7 @@ def decode(device, generated_outputs, edited, snac_model, output_path, audio_pat
 
             process_npy(input_path=os.path.join(audio_path, f"{title}.npy"),
                         output_wav=os.path.join(audio_path, f"{title}.wav"),
-                        tempo=speed_factor)
+                        tempo=speed_up)
 
             try:
                 os.remove(os.path.join(audio_path, f"{title}.npy"))
@@ -329,16 +330,17 @@ def gather_files(path):
     return files, edits
 
 
-def process(path, model_path, limits, createAudio):
-    files, edits = gather_files(path)
-    snac_model = getSnacModel(model_path)
+def process(args):
+
+    files, edits = gather_files(args.path)
+    snac_model = getSnacModel(args.modelPath)
     device = 'cuda:0' if torch.cuda.is_available() else getDevice()
     snac_model.to(device)
     start = 0
     end = getChapterNo(files[-1])
-    if limits:
-        start = limits[0]
-        end = limits[1]
+    if args.limits:
+        start = args.limits[0]
+        end = args.limits[1]
     for file in files:
         currentChapter = getChapterNo(file)
         if not start <= currentChapter <= end:
@@ -356,12 +358,14 @@ def process(path, model_path, limits, createAudio):
                            edited=len(edits[title]) > 0,
                            generated_outputs=generated_outputs,
                            snac_model=snac_model,
-                           output_path=path,
+                           output_path=args.path,
                            audio_path=audio_path,
                            para_breaks=para_breaks,
                            tagged_list=tagged_list,
                            title=title,
-                           createAudio=createAudio)
+                           speed_up=args.rate,
+                           createSrt=args.createSrt,
+                           createAudio=args.createAudio)
         if completed:
             print(f"Decoding completed for {title} !")
 
@@ -406,6 +410,8 @@ if __name__ == '__main__':
     parser.add_argument("--path", type=str, default="output", help="Audio Output Path")
     parser.add_argument("--modelPath", type=str, default="models", help="Snac Model Path")
     parser.add_argument("--limits", type=json.loads, default=None, help="Chapter Range")
+    parser.add_argument("--rate", type=int, default=1.3, help="Audio Speed")
+    parser.add_argument("--createSrt", action="store_true", help="Create Audio")
     parser.add_argument("--createAudio", action="store_true", help="Create Audio")
     parser.add_argument("--merge", action="store_true", help="Create Audio")
 
@@ -413,8 +419,6 @@ if __name__ == '__main__':
 
     path = args.path
     model_path = args.modelPath
-    limits = args.limits
-    createAudio = args.createAudio
     merge = args.merge
 
     if not os.path.isdir(path):
@@ -426,7 +430,7 @@ if __name__ == '__main__':
     if merge:
         merge_files(path)
     else:
-        process(path, model_path, limits, createAudio)
+        process(args)
 
     ## TO check part voices
     # gen_out = np.load("output/audios/part_5.npy")
