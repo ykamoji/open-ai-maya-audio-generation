@@ -392,11 +392,12 @@ def merge_files(path):
                 print(f"Deleting {title} {partial_names}")
                 for partial in partials:
                     os.remove(partial)
-                print(f"Deleting old {title}_decoded.npy")
-                os.remove(os.path.join(parent, f"{title}_decoded.npy"))
-                os.rename(os.path.join(parent, f"{title}_decoded_edited.npy"),
-                          os.path.join(parent, f"{title}_decoded.npy"))
-                print(f"Saving new {title}_decoded.npy")
+                if os.path.isfile(os.path.join(parent, f"{title}_decoded.npy")):
+                    print(f"Deleting old {title}_decoded.npy")
+                    os.remove(os.path.join(parent, f"{title}_decoded.npy"))
+                    os.rename(os.path.join(parent, f"{title}_decoded_edited.npy"),
+                              os.path.join(parent, f"{title}_decoded.npy"))
+                    print(f"Saving new {title}_decoded.npy")
 
             except Exception as e:
                 print(f"Error for merging data for {title}. {e}")
