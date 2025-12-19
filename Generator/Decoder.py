@@ -193,7 +193,7 @@ def write_srt(sentences, timeline, out_path):
 
 
 def decode(device, generated_outputs, edited, snac_model, output_path, audio_path,
-           para_breaks, tagged_list, title, speed_up, createSrt, createAudio):
+           para_breaks, tagged_list, title, save_decoded, speed_up, createSrt, createAudio):
 
     completed = True
     try:
@@ -226,10 +226,10 @@ def decode(device, generated_outputs, edited, snac_model, output_path, audio_pat
         audio_frames = []
         saved_decoded_audio = []
         decoded_audio_available = True
-        if os.path.isfile(os.path.join(audio_path, f"{title}_decoded.npy")) and not edited:
-            saved_decoded_audio = np.load(os.path.join(audio_path, f"{title}_decoded.npy"), allow_pickle=True).tolist()
-        elif not edited and os.path.isfile(os.path.join(audio_path, f"{title}_decoded_edited.npy")):
+        if not edited and os.path.isfile(os.path.join(audio_path, f"{title}_decoded_edited.npy")):
             saved_decoded_audio = np.load(os.path.join(audio_path, f"{title}_decoded_edited.npy"), allow_pickle=True).tolist()
+        elif not edited and os.path.isfile(os.path.join(audio_path, f"{title}_decoded.npy")):
+            saved_decoded_audio = np.load(os.path.join(audio_path, f"{title}_decoded.npy"), allow_pickle=True).tolist()
         else:
             decoded_audio_available = False
 
@@ -256,7 +256,7 @@ def decode(device, generated_outputs, edited, snac_model, output_path, audio_pat
             if not decoded_audio_available:
                 saved_decoded_audio.append(decoded)
 
-        if not decoded_audio_available:
+        if save_decoded and not decoded_audio_available:
             if not edited:
                 np.save(os.path.join(audio_path, f"{title}_decoded.npy"), np.array(saved_decoded_audio, dtype=object))
             else:
@@ -363,6 +363,7 @@ def process(args):
                            para_breaks=para_breaks,
                            tagged_list=tagged_list,
                            title=title,
+                           save_decoded=args.saveDecoded,
                            speed_up=args.rate,
                            createSrt=args.createSrt,
                            createAudio=args.createAudio)
@@ -411,8 +412,9 @@ if __name__ == '__main__':
     parser.add_argument("--path", type=str, default="output", help="Audio Output Path")
     parser.add_argument("--modelPath", type=str, default="models", help="Snac Model Path")
     parser.add_argument("--limits", type=json.loads, default=None, help="Chapter Range")
-    parser.add_argument("--rate", type=int, default=1.3, help="Audio Speed")
+    parser.add_argument("--rate", type=float, default=1.35, help="Audio Speed")
     parser.add_argument("--createSrt", action="store_true", help="Create Audio")
+    parser.add_argument("--saveDecoded", action="store_true", help="Create Audio")
     parser.add_argument("--createAudio", action="store_true", help="Create Audio")
     parser.add_argument("--merge", action="store_true", help="Create Audio")
 
