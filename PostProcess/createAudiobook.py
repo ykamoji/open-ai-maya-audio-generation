@@ -4,7 +4,8 @@ import shutil
 import re
 import json
 import argparse
-from PostProcess.audio_extraction import extract_all_features, extract_audio_features
+from pathlib import Path
+from PostProcess.audio_extraction import extract_all_features
 from PostProcess.image_extraction import extract_image_data
 
 
@@ -20,7 +21,7 @@ def move_audio_and_subtitle_files(source_base_path: str, destination_folder: str
                                   e.g., '/content/drive/MyDrive/AI/Audiobook'
     """
     os.makedirs(destination_folder, exist_ok=True)
-    print(f"Ensured existence of destination folder: {destination_folder}")
+    # print(f"Ensured existence of destination folder: {destination_folder}")
 
     files_to_move = []
     for ext in ['m4a', 'srt']:
@@ -43,6 +44,40 @@ def move_audio_and_subtitle_files(source_base_path: str, destination_folder: str
             print(f"Error moving file {f}: {e}")
 
     print(f"Successfully moved {moved_count} out of {len(files_to_move)} files to {destination_folder}")
+
+
+def copy_media_files(src: str, dst: str) -> None:
+    """
+    Copy all media files and directories from src to dst.
+
+    - Creates the destination directory if it does not exist
+    - Preserves file metadata (timestamps, permissions)
+    - Overwrites existing files
+
+    :param src: Source directory path
+    :param dst: Destination directory path
+    """
+    src_path = Path(src)
+    dst_path = Path(dst)
+
+    if not src_path.exists():
+        raise FileNotFoundError(f"Source path does not exist: {src}")
+
+    print(f"Copying media files {src} to {dst}")
+
+    if src_path.is_file():
+        dst_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src_path, dst_path)
+        return
+
+    dst_path.mkdir(parents=True, exist_ok=True)
+
+    for item in src_path.iterdir():
+        dest_item = dst_path / item.name
+        if item.is_dir():
+            shutil.copytree(item, dest_item, dirs_exist_ok=True)
+        else:
+            shutil.copy2(item, dest_item)
 
 
 def read_chapter_intro(srt_path):
@@ -103,11 +138,15 @@ if __name__ == "__main__":
 
     parser.add_argument("--s", type=str,
                         default="output", help="Audio source Paths")
+    parser.add_argument("--i", type=str,
+                        default="/Users/ykamoji/Documents/Audiobook_media", help="Audio source Paths")
     parser.add_argument("--d", type=str,
                         default="/Users/ykamoji/Documents/Audiobooks", help="Audio destination Paths")
     args = parser.parse_args()
 
     move_audio_and_subtitle_files(args.s, args.d)
+
+    copy_media_files(args.i, args.d)
 
     audio_paths, srt_paths = create_audio_extraction_data(args.d)
 
