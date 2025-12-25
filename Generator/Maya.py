@@ -18,6 +18,7 @@ warnings.filterwarnings("ignore")
 IS_TPU = False
 try:
     import torch_xla.core.xla_model as xm
+    import torch_xla.distributed.xla_multiprocessing as xmp
     IS_TPU = True
 except Exception:
     pass
@@ -202,8 +203,8 @@ def processVoice(model, tokenizer, prompt_input, is_tagged, part, xlm_device=Non
         max_new_tokens = max_new_token_boundaries(len(prompt_input["input_ids"][0]))
         start_time = time.time()
         while True:
-            with torch.inference_mode():
-                prompt_inputs = {k: v.to(xlm_device if xlm_device else model.device) for k, v in prompt_input.items()}
+            prompt_inputs = {k: v.to(xlm_device if xlm_device else model.device) for k, v in prompt_input.items()}
+            with torch.no_grad():
                 outputs = model.generate(
                     **prompt_inputs,
                     max_new_tokens=max_new_tokens,
@@ -379,10 +380,10 @@ def gpu_worker(gpu_id, MODEL_NAME, CACHE_PATH, platform, task_q, metrics_q, outp
     # Voice warmup
     try:
         dummy = torch.randint(0, 30000, (1, 5), dtype=torch.long, device=f"cuda:{gpu_id}")
-        with torch.inference_mode():
+        with torch.no_grad():
             _ = model.model.layers[0](model.model.embed_tokens(dummy))
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Warm up error {e} for GPU {gpu_id}\n")
     print(f"\nVoice warm up completed for GPU {gpu_id}\n")
 
     torch.manual_seed(0)
@@ -518,13 +519,11 @@ def multiTPU(MODEL_NAME, CACHE_PATH, platform, outputPath, para_breaks,
 
         model = getARModel(MODEL_NAME, CACHE_PATH, platform, IS_TPU=True)
         model.to(xm.xla_device())
-        model.device = xm.xla_device()
         tokenizer = getTokenizer(MODEL_NAME, CACHE_PATH, platform)
 
-        with torch.inference_mode():
-            dummy = torch.randint(0, 30000, (1, 5), dtype=torch.long, device=xm.xla_device())
-            with torch.inference_mode():
-                _ = model.model.layers[0](model.model.embed_tokens(dummy))
+        dummy = torch.randint(0, 100, (1, 5), dtype=torch.long).to(xm.xla_device())
+        with torch.no_grad():
+            _ = model.generate(dummy, max_new_tokens=1)
         xm.mark_step()
 
         print(f"\nVoice warm up completed for TPU {rank}\n")
@@ -596,8 +595,8 @@ def multiTPU(MODEL_NAME, CACHE_PATH, platform, outputPath, para_breaks,
             if pbar is not None:
                 pbar.close()
 
-    world_size = 2
-    xm.spawn(worker,
+    world_size = min(len(xm.get_xla_supported_devices()), 2)
+    xmp.spawn(worker,
              args=(world_size, MODEL_NAME, CACHE_PATH, platform, outputPath,
                    para_breaks, tagged_list, inputs, start, edit_present, title),
              nprocs=world_size)
