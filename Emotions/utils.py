@@ -3,6 +3,15 @@ import re
 import torch.nn.functional as F
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+IS_TPU = False
+TPU_DEVICE = None
+try:
+    import torch_xla.core.xla_model as xm
+    TPU_DEVICE = xm.xla_device()
+    IS_TPU = True
+except Exception:
+    pass
+
 sentence_regex = re.compile(
     r'''(?x)
     (?<!\w\.\w.)          
@@ -32,6 +41,8 @@ def getDevice():
     device = "cpu"
     if torch.cuda.is_available():
         device = "cuda"
+    elif IS_TPU:
+        return TPU_DEVICE
     elif torch.backends.mps.is_available():
         device = "mps"
     return device

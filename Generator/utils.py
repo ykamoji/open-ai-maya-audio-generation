@@ -19,12 +19,12 @@ def getModels(MODEL_NAME, CACHE_PATH, platform):
     return model, snac_model, tokenizer
 
 
-def getARModel(MODEL_NAME, CACHE_PATH, platform, device=None):
+def getARModel(MODEL_NAME, CACHE_PATH, platform, device=None, IS_TPU=False):
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_NAME if platform != "Kaggle" else MODEL_NAME + 'Model/',
         cache_dir=CACHE_PATH,
-        torch_dtype=torch.float16,
-        device_map={"": device} if device else "balanced",
+        torch_dtype=torch.float16 if not IS_TPU else torch.bfloat16,
+        device_map=({"": device} if device else "balanced") if not IS_TPU else None,
         trust_remote_code=True
     )
     model.generation_config.cache_implementation = "static"

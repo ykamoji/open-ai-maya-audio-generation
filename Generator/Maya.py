@@ -15,6 +15,13 @@ from Generator.utils import getARModel, getTokenizer, load_dialogues, move_edite
 
 warnings.filterwarnings("ignore")
 
+IS_TPU = False
+try:
+    import torch_xla.core.xla_model as xm
+    IS_TPU = True
+except Exception:
+    pass
+
 CODE_START_TOKEN_ID = 128257
 CODE_END_TOKEN_ID = 128258
 CODE_TOKEN_OFFSET = 128266
@@ -112,6 +119,15 @@ def convert(Args, pages, outputPath):
             "platform": platform,
             "outputPath": outputPath,
         }
+    elif IS_TPU:
+        print("Running in TPU env.")
+        process_function = multiTPU
+        args = {
+            "MODEL_NAME": MODEL_NAME,
+            "CACHE_PATH": CACHE_PATH,
+            "platform": platform,
+            "outputPath": outputPath,
+        }
     else:
         print("Running in CPU or single GPU env.")
         process_function = singleProcess
@@ -181,14 +197,15 @@ def max_new_token_boundaries(input_length):
         return 4600
 
 
-def processVoice(model, tokenizer, prompt_input, is_tagged, part):
+def processVoice(model, tokenizer, prompt_input, is_tagged, part, xlm_device=None):
     try:
         max_new_tokens = max_new_token_boundaries(len(prompt_input["input_ids"][0]))
         start_time = time.time()
         while True:
             with torch.inference_mode():
+                prompt_inputs = {k: v.to(xlm_device if xlm_device else model.device) for k, v in prompt_input.items()}
                 outputs = model.generate(
-                    **prompt_input.to(model.device),
+                    **prompt_inputs,
                     max_new_tokens=max_new_tokens,
                     min_new_tokens=28,  # At least 4 SNAC frames
                     temperature=0.4 if is_tagged else 0.25,
@@ -206,6 +223,7 @@ def processVoice(model, tokenizer, prompt_input, is_tagged, part):
                     f"\nPart {part} ({len(prompt_input['input_ids'][0])}). EOS token not found. Trying again with {max_new_tokens}\n")
                 del outputs
                 del generated_tokens
+                del prompt_inputs
             else:
                 # eos_position = generated_tokens.index(CODE_END_TOKEN_ID)
                 # print(f"Part {part} EOS token found at position {eos_position}/{len(generated_tokens)} for {len(inputs['input_ids'][0])}")
@@ -486,3 +504,100 @@ def metric_worker(metrics_q, outputPath, title, done_event, start, total_parts, 
     writer.flush()
     writer.close()
     pbar.close()
+
+
+def multiTPU(MODEL_NAME, CACHE_PATH, platform, outputPath, para_breaks,
+             tagged_list, inputs, start, edit_present, title):
+    try:
+        import torch_xla.core.xla_model as xm
+    except Exception:
+        pass
+
+    def worker(rank, world_size, MODEL_NAME, CACHE_PATH, platform, outputPath,
+               para_breaks, tagged_list, inputs, start, edit_present, title):
+
+        model = getARModel(MODEL_NAME, CACHE_PATH, platform, IS_TPU=True)
+        model.to(xm.xla_device())
+        model.device = xm.xla_device()
+        tokenizer = getTokenizer(MODEL_NAME, CACHE_PATH, platform)
+
+        with torch.inference_mode():
+            dummy = torch.randint(0, 30000, (1, 5), dtype=torch.long, device=xm.xla_device())
+            with torch.inference_mode():
+                _ = model.model.layers[0](model.model.embed_tokens(dummy))
+        xm.mark_step()
+
+        print(f"\nVoice warm up completed for TPU {rank}\n")
+
+        # rank-0 only initializes TB logging
+        if rank == 0:
+            writer = SummaryWriter(log_dir=f"{outputPath}runs/{title}")
+            input_lengths, generation_times = [], []
+            step = 0
+            pbar = tqdm(total=len(inputs), desc=f"{title} (TPU)", ncols=90, position=0)
+            if start > 0: pbar.update(start)
+        else:
+            writer = None
+            pbar = None
+
+        audio_path = outputPath + f"audios/{title}/"
+        Path(audio_path).mkdir(parents=True, exist_ok=True)
+
+        local_inputs = inputs[rank::world_size]
+
+        for prompt_input, is_tagged, part_id, updated in local_inputs:
+
+            if pbar is not None:
+                pbar.update(1)
+
+            if edit_present and not updated:
+                continue
+
+            generated_tokens, (generation_time, audio_duration, rtf, tps) = processVoice(
+                model=model,
+                tokenizer=tokenizer,
+                prompt_input=prompt_input,
+                is_tagged=is_tagged,
+                part=part_id,
+                xlm_device=xm.xla_device(),
+            )
+
+            xm.mark_step()
+
+            if edit_present:
+                np.save(audio_path + f"edited_{part_id}.npy", generated_tokens)
+            else:
+                np.save(audio_path + f"part_{part_id}.npy", generated_tokens)
+
+            # rank-0 logs metrics
+            if writer is not None:
+                audio_duration = estimate_audio_duration(generated_tokens)
+                input_length = len(prompt_input["input_ids"][0])
+                input_lengths.append(input_length)
+                generation_times.append(generation_time)
+                step += 1
+
+                if step % LOG_STEPS == 0:
+                    writer.add_scalar("Evaluation/InputSize", input_length, step)
+                    writer.add_scalar("Evaluation/AudioDuration", audio_duration, step)
+                    writer.add_scalar("Performance/GenerationTime", generation_time, step)
+                    writer.add_scalar("Performance/RTF", rtf, step)
+                    writer.add_scalar("Performance/TPS", tps, step)
+                    if step > 2:
+                        correlation = np.corrcoef(input_lengths, generation_times)[0, 1]
+                        writer.add_scalar("Performance/InputDurationCorr", correlation, step)
+
+        # combine + close logs only once
+        if rank == 0:
+            if not edit_present:
+                combine(audio_path, outputPath, para_breaks, tagged_list, title)
+            writer.close()
+
+            if pbar is not None:
+                pbar.close()
+
+    world_size = 2
+    xm.spawn(worker,
+             args=(world_size, MODEL_NAME, CACHE_PATH, platform, outputPath,
+                   para_breaks, tagged_list, inputs, start, edit_present, title),
+             nprocs=world_size)
