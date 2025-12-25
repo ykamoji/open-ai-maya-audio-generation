@@ -363,8 +363,8 @@ def gpu_worker(gpu_id, MODEL_NAME, CACHE_PATH, platform, task_q, metrics_q, outp
         dummy = torch.randint(0, 30000, (1, 5), dtype=torch.long, device=f"cuda:{gpu_id}")
         with torch.inference_mode():
             _ = model.model.layers[0](model.model.embed_tokens(dummy))
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Warm up error {e} for GPU {gpu_id}")
     print(f"\nVoice warm up completed for GPU {gpu_id}\n")
 
     torch.manual_seed(0)
