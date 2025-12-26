@@ -358,20 +358,31 @@ def gpu_worker(gpu_id, MODEL_NAME, CACHE_PATH, platform, task_q, metrics_q, outp
     for p in model.parameters():
         p.requires_grad = False
 
-    # Voice warmup
-    try:
-        dummy = torch.randint(0, 30000, (1, 5), dtype=torch.long, device=f"cuda:{gpu_id}")
-        with torch.inference_mode():
-            _ = model.model.layers[0](model.model.embed_tokens(dummy))
-    except Exception as e:
-        print(f"Warm up error {e} for GPU {gpu_id}")
-    print(f"\nVoice warm up completed for GPU {gpu_id}\n")
-
     torch.manual_seed(0)
     np.random.seed(0)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(0)
         torch.cuda.manual_seed_all(0)
+
+    # Voice warmup
+    try:
+        dummy = tokenizer(build_prompt(tokenizer, "description", "warm up"), return_tensors="pt")
+        with torch.inference_mode():
+            _ = model.generate(
+                    **dummy.to(model.device),
+                    max_new_tokens=50,
+                    min_new_tokens=28,
+                    temperature=0.4,
+                    top_p=0.9,
+                    repetition_penalty=1.10,
+                    do_sample=True,
+                    eos_token_id=CODE_END_TOKEN_ID,
+                    pad_token_id=tokenizer.pad_token_id,
+                    use_cache=True,
+                )
+        print(f"\nVoice warm up completed for GPU {gpu_id}\n")
+    except Exception as e:
+        print(f"Warm up error {e} for GPU {gpu_id}")
 
     while True:
         item = task_q.get()
