@@ -132,6 +132,7 @@ def convert(Args, pages, outputPath):
             if broken_paras:
                 continue
 
+            total = len(chunks)
             ## when partial parts were interrupted from last session
             start = 0
             part_files = _gather_sorted_part_files(outputPath + "/audios/", page['title'])
@@ -157,6 +158,7 @@ def convert(Args, pages, outputPath):
                              tagged_list=tagged_list,
                              inputs=inputs,
                              start=start,
+                             total=total,
                              edit_present=edit_present,
                              title=page['title'])
             processed += 1
@@ -226,7 +228,7 @@ def processVoice(model, tokenizer, prompt_input, is_tagged, part):
     return generated_tokens, (generation_time, audio_duration, rtf, tps)
 
 
-def singleProcess(model, tokenizer, outputPath, para_breaks, tagged_list, inputs, start, edit_present, title):
+def singleProcess(model, tokenizer, outputPath, para_breaks, tagged_list, inputs, start, total, edit_present, title):
     torch.manual_seed(0)
     np.random.seed(0)
     if torch.cuda.is_available():
@@ -239,7 +241,7 @@ def singleProcess(model, tokenizer, outputPath, para_breaks, tagged_list, inputs
     model = model.to(getDevice())
     audio_path = outputPath + f"audios/{title}/"
     Path(audio_path).mkdir(parents=True, exist_ok=True)
-    for prompt_input, is_tagged, part_id, updated in tqdm(inputs, desc=f"{title}", ncols=90, position=1,
+    for prompt_input, is_tagged, part_id, updated in tqdm(inputs, total=total, desc=f"{title}", ncols=90, position=1,
                                                           file=sys.stdout, initial=start):
 
         # print(f"Voice generation for part {step}/{total} ...")
@@ -280,7 +282,7 @@ def singleProcess(model, tokenizer, outputPath, para_breaks, tagged_list, inputs
 
 
 def multiGPU(GPUCount, MODEL_NAME, CACHE_PATH, platform, outputPath, para_breaks, tagged_list,
-             inputs, start, edit_present, title):
+             inputs, start, total, edit_present, title):
     task_q = mp.Queue()
     metrics_q = mp.Queue()
     done_event = mp.Event()
@@ -298,7 +300,7 @@ def multiGPU(GPUCount, MODEL_NAME, CACHE_PATH, platform, outputPath, para_breaks
     # start aggregator process
     agg_proc = mp.Process(
         target=metric_worker,
-        args=(metrics_q, outputPath, title, done_event, start, len(inputs)),
+        args=(metrics_q, outputPath, title, done_event, start, total),
         daemon=True,
     )
     agg_proc.start()
