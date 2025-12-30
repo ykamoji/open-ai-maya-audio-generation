@@ -6,7 +6,7 @@ import json
 import argparse
 from pathlib import Path
 from PostProcess.audio_extraction import extract_all_features
-from PostProcess.image_extraction import extract_image_data
+from PostProcess.image_extraction import extract_image_data, extract_character_data
 
 
 def move_audio_and_subtitle_files(source_base_path: str, destination_folder: str):
@@ -153,7 +153,8 @@ if __name__ == "__main__":
     metadata = {
         "audiobook_progress":{},
         "static":{},
-        "audiobook_playlists":[]
+        "audiobook_playlists":[],
+        "characters":{}
     }
 
     if os.path.isfile(f"{args.d}/metadata.json"):
@@ -193,6 +194,13 @@ if __name__ == "__main__":
         data['scheme'] = image_data[image_name]['scheme']
         data['dims'] = image_data[image_name]['dims']
         metadata["static"][image_name] = data
+
+    character_data = extract_character_data(args.d)
+
+    for image_name in character_data:
+        data = metadata["characters"].get(image_name, {})
+        data['scheme'] = character_data[image_name]['scheme']
+        metadata["characters"][image_name] = data
 
     intro_data = get_audio_titles(args.d)
     for title in intro_data:

@@ -184,7 +184,7 @@ def best_theme_color(path):
 
 def extract_image_data(path):
 
-    files = glob.glob(f"{path}/*.png")
+    files = [file for file in glob.glob(f"{path}/*.png") if "Chapter" in file]
 
     image_data = {}
     for file in tqdm(files, desc="Image Extraction"):
@@ -207,6 +207,28 @@ def extract_image_data(path):
     print(f"Image extraction completed !")
 
     return image_data
+
+
+def extract_character_data(path):
+
+    files = [file for file in glob.glob(f"{path}/*.png") if "Chapter" not in file]
+
+    character_data = {}
+
+    for file in tqdm(files, desc="Charactor Extraction"):
+        try:
+            filename = os.path.basename(file).split(".").pop(0)
+            color = best_theme_color(file)
+            character_data[filename] = {
+                "scheme": [int(color[0]), int(color[1]), int(color[2])],
+            }
+
+        except Exception as e:
+            print(f"\n{file} : {e}")
+
+    print(f"Charactor extraction completed !")
+
+    return character_data
 
 
 # ----------------------------------------------------------
